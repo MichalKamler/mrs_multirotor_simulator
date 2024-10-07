@@ -18,14 +18,19 @@
 #include <KDTreeVectorOfVectorsAdaptor.h>
 #include <Eigen/Dense>
 
-//}
+#include <mrs_msgs/VelocityReferenceStampedSrv.h>
+#include <mrs_msgs/ReferenceStamped.h>
+#include <std_srvs/Trigger.h>
+
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <fstream>
 
 namespace mrs_multirotor_simulator
 {
 
 typedef std::vector<Eigen::VectorXd> my_vector_of_vectors_t;
-
-/* class MultirotorSimulator //{ */
 
 class MultirotorSimulator : public nodelet::Nodelet {
 
@@ -42,6 +47,9 @@ private:
 
   ros::Time  sim_time_;
   std::mutex mutex_sim_time_;
+
+  std::mutex mutex_current_state_;
+  int current_state_;
 
   double _clock_min_dt_;
 
@@ -88,11 +96,38 @@ private:
   void                                                         callbackDrs(mrs_multirotor_simulator::multirotor_simulatorConfig& config, uint32_t level);
   DrsConfig_t                                                  drs_params_;
   std::mutex                                                   mutex_drs_params_;
+  
+  // | -------------- custom added -------------------------------|
+  mrs_msgs::VelocityReferenceStampedSrv vel_srv_;
+  
+  std::vector<ros::ServiceClient> client_vel_ref_arr;
+  std::vector<Eigen::VectorXd> uavs_odom;
+  void updateVelocities(void);
+
+  Eigen::VectorXd dPhi_V_of(const Eigen::VectorXd &Phi, const Eigen::VectorXd &V);
+  std::pair<double, double> compute_state_variables(double vel_now, const Eigen::VectorXd &Phi, const Eigen::VectorXd &V_now);
+
+  void compute_visual_field(int id_uav, Eigen::VectorXd &visual_field, double uav_heading);
+
+  void plot_visual_field(const std::vector<bool>& visual_field);
+
+  void updateUavsOdomVec(void);
+
+  bool activationServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res);
+  ros::ServiceServer service_activate_control_;
+  bool control_allowed = false;
+
+  double GAM;
+  double V0;                                                  
+  double ALP0;
+  double ALP1;
+  double ALP2;
+  double BET0;
+  double BET1;
+  double BET2;
+  double R;
+  int LIST_SIZE;
 };
-
-//}
-
-/* onInit() //{ */
 
 void MultirotorSimulator::onInit() {
 
@@ -125,6 +160,16 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("collisions/crash", drs_params_.collisions_crash);
   param_loader.loadParam("collisions/rebounce", drs_params_.collisions_rebounce);
   param_loader.loadParam("frames/world/name", _world_frame_name_);
+  param_loader.loadParam("fish_model_params/GAM",GAM);
+  param_loader.loadParam("fish_model_params/ALP0",ALP0);
+  param_loader.loadParam("fish_model_params/ALP1",ALP1);
+  param_loader.loadParam("fish_model_params/ALP2",ALP2);
+  param_loader.loadParam("fish_model_params/BET0",BET0);
+  param_loader.loadParam("fish_model_params/BET1",BET1);
+  param_loader.loadParam("fish_model_params/BET2",BET2);
+  param_loader.loadParam("fish_model_params/V0",V0);
+  param_loader.loadParam("fish_model_params/R",R);
+  param_loader.loadParam("fish_model_params/LIST_SIZE",LIST_SIZE);
 
   double clock_rate;
   param_loader.loadParam("clock_rate", clock_rate);
@@ -146,10 +191,13 @@ void MultirotorSimulator::onInit() {
   std::vector<std::string> uav_names;
 
   param_loader.loadParam("uav_names", uav_names);
-
   for (size_t i = 0; i < uav_names.size(); i++) {
 
     std::string uav_name = uav_names.at(i);
+
+    ros::ServiceClient client_vel_ref_ = nh_.serviceClient<mrs_msgs::VelocityReferenceStampedSrv>("/" + uav_name + "/control_manager/velocity_reference");
+    client_vel_ref_arr.push_back(client_vel_ref_);
+
 
     ROS_INFO("[MultirotorSimulator]: initializing '%s'", uav_name.c_str());
 
@@ -176,6 +224,17 @@ void MultirotorSimulator::onInit() {
 
   ph_poses_ = mrs_lib::PublisherHandler<geometry_msgs::PoseArray>(nh_, "uav_poses_out", 10, false);
 
+  mrs_lib::SubscribeHandlerOptions shopts;
+  shopts.nh                 = nh_;
+  shopts.node_name          = "AreaMonitoringController";
+  shopts.no_message_timeout = mrs_lib::no_timeout;
+  shopts.threadsafe         = true;
+  shopts.autostart          = true;
+  shopts.queue_size         = 10;
+  shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
+
+  service_activate_control_   = nh_.advertiseService("control_activation_in", &MultirotorSimulator::activationServiceCallback, this);
+
   // | ------------------------- timers ------------------------- |
 
   timer_main_ = nh_.createWallTimer(ros::WallDuration(1.0 / (_simulation_rate_ * drs_params_.realtime_factor)), &MultirotorSimulator::timerMain, this);
@@ -188,12 +247,6 @@ void MultirotorSimulator::onInit() {
 
   ROS_INFO("[MultirotorSimulator]: initialized");
 }
-
-//}
-
-// | ------------------------- timers ------------------------- |
-
-/* timerMain() //{ */
 
 void MultirotorSimulator::timerMain([[maybe_unused]] const ros::WallTimerEvent& event) {
 
@@ -213,8 +266,14 @@ void MultirotorSimulator::timerMain([[maybe_unused]] const ros::WallTimerEvent& 
   }
 
   publishPoses();
-
-  handleCollisions();
+  // handleCollisions();
+  
+  static ros::Time last_velocity_update_time = ros::Time(0);  // Store last update time
+  // updateUavsOdomVec();
+  if ((sim_time_ - last_velocity_update_time).toSec() >= 0.1) {  // 0.5 seconds = 2 Hz
+    updateVelocities();
+    last_velocity_update_time = sim_time_;  // Update the time
+  }
 
   // | ---------------------- publish time ---------------------- |
 
@@ -228,11 +287,9 @@ void MultirotorSimulator::timerMain([[maybe_unused]] const ros::WallTimerEvent& 
 
     last_published_time_ = sim_time_;
   }
+
+  
 }
-
-//}
-
-/* timeStatus() //{ */
 
 void MultirotorSimulator::timerStatus([[maybe_unused]] const ros::WallTimerEvent& event) {
 
@@ -254,10 +311,6 @@ void MultirotorSimulator::timerStatus([[maybe_unused]] const ros::WallTimerEvent
   ROS_INFO_THROTTLE(0.1, "[MultirotorSimulator]: %s, desired RTF = %.2f, actual RTF = %.2f", drs_params.paused ? "paused" : "running",
                     drs_params.realtime_factor, actual_rtf_);
 }
-
-//}
-
-/* callbackDrs() //{ */
 
 void MultirotorSimulator::callbackDrs(mrs_multirotor_simulator::multirotor_simulatorConfig& config, [[maybe_unused]] uint32_t level) {
 
@@ -287,10 +340,6 @@ void MultirotorSimulator::callbackDrs(mrs_multirotor_simulator::multirotor_simul
 
   ROS_INFO("[MultirotorSimulator]: DRS updated params");
 }
-
-//}
-
-/* handleCollisions() //{ */
 
 void MultirotorSimulator::handleCollisions(void) {
 
@@ -358,10 +407,6 @@ void MultirotorSimulator::handleCollisions(void) {
   }
 }
 
-//}
-
-/* publishPoses() //{ */
-
 void MultirotorSimulator::publishPoses(void) {
 
   auto sim_time = mrs_lib::get_mutexed(mutex_sim_time_, sim_time_);
@@ -388,9 +433,154 @@ void MultirotorSimulator::publishPoses(void) {
   ph_poses_.publish(pose_array);
 }
 
-//}
+void MultirotorSimulator::updateVelocities(void){
+  if (!control_allowed){return;}
 
-}  // namespace mrs_multirotor_simulator
+  updateUavsOdomVec();
+  for (size_t i = 0; i < uavs_.size(); i++) { 
+    double yaw = uavs_odom[i][6];
+    double vx_local = uavs_odom[i][3];  // local x velocity
+    double vy_local = uavs_odom[i][4];  // local y velocity
+
+    Eigen::VectorXd visual_field_i_uav = Eigen::VectorXd::Zero(LIST_SIZE);
+    Eigen::VectorXd phi = Eigen::VectorXd::LinSpaced(LIST_SIZE, -M_PI, M_PI);
+    
+    double vel_norm = sqrt(pow(vx_local ,2) + pow(vx_local,2)); //norm of velocity
+    double vx_global = vx_local * cos(yaw) - vy_local * sin(yaw);
+    double vy_global = vx_local * sin(yaw) + vy_local * cos(yaw);
+    double uav_vel_heading = atan2(vy_global, vx_global); //global coord heading
+
+    compute_visual_field(i, visual_field_i_uav, uav_vel_heading);
+
+    auto dvel_dpsi = compute_state_variables(vel_norm, phi, visual_field_i_uav);
+
+    vel_norm = vel_norm + dvel_dpsi.first;
+    uav_vel_heading = uav_vel_heading + dvel_dpsi.second;
+
+    vel_srv_.request.reference.reference.velocity.x = vel_norm * cos(uav_vel_heading); //global coords set up
+    vel_srv_.request.reference.reference.velocity.y = vel_norm * sin(uav_vel_heading); 
+    if(uavs_odom[i][2]>1.8){
+      vel_srv_.request.reference.reference.velocity.z = -0.1; 
+    }else{
+      vel_srv_.request.reference.reference.velocity.z = 0; 
+    }
+    vel_srv_.request.reference.reference.use_heading = true;
+    vel_srv_.request.reference.reference.heading = uav_vel_heading;
+
+    if (client_vel_ref_arr[i].call(vel_srv_)){
+      // ROS_INFO("------------------ Service call succesful uav ---------------");
+    } else {
+      ROS_ERROR("------------------ Service call unsuccesful uav ---------------");
+    }
+  }
+}
+
+void MultirotorSimulator::updateUavsOdomVec(void){
+  uavs_odom.resize(0);
+  for (size_t i = 0; i < uavs_.size(); i++) {
+    Eigen::VectorXd uav_od;
+    uav_od.resize(7);
+    auto state = uavs_.at(i)->getState();
+    uav_od[0] = state.x(0); //x
+    uav_od[1] = state.x(1); //y
+    uav_od[2] = state.x(2); //z
+    Eigen::Vector3d vel_body = state.R.transpose() * state.v; //this is not global
+    uav_od[3] = vel_body(0); // vel x
+    uav_od[4] = vel_body(1); // vel y
+    uav_od[5] = vel_body(2); // vel z
+    uav_od[6] = mrs_lib::AttitudeConverter(state.R).getHeading(); //yaw
+    uavs_odom.push_back(uav_od);
+  }
+}
+
+Eigen::VectorXd MultirotorSimulator::dPhi_V_of(const Eigen::VectorXd &Phi, const Eigen::VectorXd &V) {
+
+  Eigen::VectorXd padV(V.size() + 2);
+  padV << V(V.size() - 1), V, V(0);
+
+  Eigen::VectorXd dPhi_V_raw = padV.tail(padV.size() - 1) - padV.head(padV.size() - 1);
+
+  if (dPhi_V_raw.size() > 1) {
+    if (dPhi_V_raw(0) > 0 && dPhi_V_raw(dPhi_V_raw.size() - 1) > 0) {
+      dPhi_V_raw = dPhi_V_raw.head(dPhi_V_raw.size() - 1);
+    } else {
+      dPhi_V_raw = dPhi_V_raw.tail(dPhi_V_raw.size() - 1);
+    }
+  } else {
+    ROS_ERROR("dPhi_V_raw size is too small for operations!");
+  }
+  return dPhi_V_raw;
+}
+
+std::pair<double, double> MultirotorSimulator::compute_state_variables(double vel_now, const Eigen::VectorXd &Phi, const Eigen::VectorXd &V_now) {    
+  double dPhi = (2*M_PI)/LIST_SIZE;
+    
+  Eigen::VectorXd dPhi_V = dPhi_V_of(Phi, V_now);
+  
+  Eigen::ArrayXd G = -V_now.array();
+  Eigen::ArrayXd G_spike = dPhi_V.array().square();
+  
+  Eigen::ArrayXd cos_phi = Phi.array().cos();
+  Eigen::ArrayXd sin_phi = Phi.array().sin();
+
+  Eigen::ArrayXd integrand_dvel = G * cos_phi;
+  Eigen::ArrayXd integrand_dpsi = G * sin_phi;
+
+  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, LIST_SIZE - 2).sum() + 0.5 * integrand_dvel[LIST_SIZE - 1]);
+  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, LIST_SIZE - 2).sum() + 0.5 * integrand_dpsi[LIST_SIZE - 1]);
+
+  double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum();
+  double dpsi = BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum();
+
+  return std::make_pair(dvel, dpsi);
+} 
+
+void MultirotorSimulator::compute_visual_field(int id_uav, Eigen::VectorXd &V_i, double psi) {
+  //psi - direction of the movement
+
+  double x_i = uavs_odom[id_uav](0);
+  double y_i = uavs_odom[id_uav](1);
+
+  for (int j = 0; j < uavs_.size(); j++) {
+    if (j != id_uav) {
+      double x_j = uavs_odom[j](0);
+      double y_j = uavs_odom[j](1);
+
+      double d_i_j = sqrt( pow(x_i - x_j, 2) + pow(y_i - y_j, 2) ); //distance between current uav and j th uav
+      double Phi_i_j = atan2( (y_j - y_i), (x_j - x_i) ); // angle of i and j uav with reagards to the global coord sys
+      double dPhi_i_j = atan(R / d_i_j);
+
+      double angle_uav_frame = atan2( sin(Phi_i_j - psi), cos(Phi_i_j - psi) );
+      int center_j = (angle_uav_frame + M_PI) / (2 * M_PI / (LIST_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+      int half_angle_width = static_cast<int>(dPhi_i_j / (2 * M_PI / (LIST_SIZE - 1)));
+
+      for (unsigned int k = 0; k <= 2 * half_angle_width; k++) {
+        if(d_i_j>R){
+          int idx = (center_j - half_angle_width + k + LIST_SIZE) % LIST_SIZE;
+          V_i[idx] = 1;
+        }else{
+          ROS_ERROR("uav_i above or under uav_i");
+        }
+      }
+    }
+  }
+}
+
+bool MultirotorSimulator::activationServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
+  ROS_INFO("[AreaMonitoringController]: Activation service called.");
+  res.success = true;
+  if (control_allowed) {
+    res.message = "Control was already allowed.";
+    ROS_WARN("[AreaMonitoringController]: %s", res.message.c_str());
+  } else {
+    control_allowed = true;
+    res.message      = "Control allowed.";
+    ROS_INFO("[AreaMonitoringController]: %s", res.message.c_str());
+  }
+  return true;
+}
+
+}
 
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(mrs_multirotor_simulator::MultirotorSimulator, nodelet::Nodelet)

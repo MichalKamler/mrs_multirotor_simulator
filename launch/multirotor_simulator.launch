@@ -49,6 +49,7 @@
     <remap from="~odom_out" to="~odom" />
     <remap from="~clock_out" to="/clock" />
     <remap from="~uav_poses_out" to="~uav_poses" />
+    <remap from="~control_activation_in" to="~activation" />
 
   </node>
 

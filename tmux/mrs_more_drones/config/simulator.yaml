@@ -1,5 +1,5 @@
-simulation_rate: 100.0
-clock_rate: 100.0
+simulation_rate: 50.0
+clock_rate: 50.0
 realtime_factor: 1.0
 
 iterate_without_input: true
@@ -8,7 +8,7 @@ individual_takeoff_platform:
   enabled: false
 
 collisions:
-  enabled: true
+  enabled: false
   crash: false
 
   # if crash==false, then the collisions are elastic
@@ -20,9 +20,9 @@ randomization:
   enabled: true
 
   bounds:
-    x: 15.0
+    x: 0.0
     y: 15.0
-    z: 15.0
+    z: 0.0
 
 ground:
   enabled: true

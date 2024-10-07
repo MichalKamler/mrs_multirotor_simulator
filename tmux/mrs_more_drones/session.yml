@@ -55,6 +55,10 @@ windows:
         - export UAV_NAME=uav8; waitForTime; roslaunch mrs_uav_autostart automatic_start.launch custom_config:=./config/automatic_start.yaml
         - export UAV_NAME=uav9; waitForTime; roslaunch mrs_uav_autostart automatic_start.launch custom_config:=./config/automatic_start.yaml
         - export UAV_NAME=uav10; waitForTime; roslaunch mrs_uav_autostart automatic_start.launch custom_config:=./config/automatic_start.yaml
+  - activation: 
+      layout: tiled
+      panes:
+        - waitForControl; history -s rosservice call /multirotor_simulator/activation             
   - goto:
       layout: tiled
       panes:

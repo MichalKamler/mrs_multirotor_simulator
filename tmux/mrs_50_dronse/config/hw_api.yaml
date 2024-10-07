@@ -1,0 +1,28 @@
+input_mode:
+  actuators:             true
+  control_group:         true
+  attitude_rate:         true
+  attitude:              true
+  acceleration_hdg_rate: true
+  acceleration_hdg:      true
+  velocity_hdg_rate:     true
+  velocity_hdg:          true
+  position:              true
+
+  feedforward: true
+
+outputs:
+  distance_sensor:      true
+  gnss:                 true
+  rtk:                  true
+  imu:                  true
+  altitude:             true
+  magnetometer_heading: true
+  rc_channels:          true
+  battery_state:        true
+  position:             true
+  orientation:          true
+  velocity:             true
+  angular_velocity:     true
+  odometry:             true
+  ground_truth:         true

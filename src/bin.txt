@@ -1,0 +1,37 @@
+// for sending date to python vizualization
+#include <cstring>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+void MultirotorSimulator::printData(const Eigen::VectorXd& data) {
+  for (int i = 0; i < data.size(); i++) {
+    if (data[i] == 0) {
+      std::cout << ".";
+    } else {
+      std::cout << "|";
+    }
+  }
+  std::cout << std::endl;  // Move the newline outside the loop
+}
+
+void MultirotorSimulator::sendData(const Eigen::VectorXd& data) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(12345);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    if (connect(sockfd, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        std::cerr << "Connection failed" << std::endl;
+        return;
+    }
+
+    // Send the data
+    send(sockfd, data.data(), data.size() * sizeof(double), 0);
+
+    close(sockfd);
+}
+
+double MultirotorSimulator::normalize_angle(double angle){
+  return std::fmod(angle + M_PI, 2 * M_PI) - M_PI;
+}

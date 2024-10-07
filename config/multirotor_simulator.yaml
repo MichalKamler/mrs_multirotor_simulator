@@ -23,8 +23,8 @@ frames:
     publish_tf: true
 
 collisions:
-  enabled: true
-  crash: true
+  enabled: false
+  crash: false
 
   # if crash==false, then the collisions are elastic
   rebounce: 100.0
@@ -47,3 +47,16 @@ ground:
 # * this patch will disappear after the total_thrust > 0.9*hover_thrust
 individual_takeoff_platform:
   enabled: false
+
+
+fish_model_params:
+  GAM: 0.1
+  ALP0: 0.05 # long range interaction            controls the overallacceleration-deceleration response
+  ALP1: 0.08 #short range interaction
+  ALP2: 0
+  BET0: 1 # long range interaction          controls the overall turning response
+  BET1: 0.08  #short range interaction  - repulsion
+  BET2: 0
+  V0: 1 # [m/s]
+  R: 1   # [m]  
+  LIST_SIZE: 16384

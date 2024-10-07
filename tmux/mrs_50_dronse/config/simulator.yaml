@@ -1,0 +1,484 @@
+simulation_rate: 50.0
+clock_rate: 50.0
+realtime_factor: 1.0
+
+iterate_without_input: true
+
+individual_takeoff_platform:
+  enabled: false
+
+collisions:
+  enabled: false
+  crash: false
+
+  # if crash==false, then the collisions are elastic
+  rebounce: 100.0
+
+# randomization of the initial conditions around the desired spawn point
+randomization:
+
+  enabled: true
+
+  bounds:
+    x: 50.0
+    y: 50.0
+    z: 10.0
+
+ground:
+  enabled: true
+  z: 0.0 # [m]
+
+uav_names: [
+  uav1,
+  uav2,
+  uav3,
+  uav4,
+  uav5,
+  uav6,
+  uav7,
+  uav8,
+  uav9,
+  uav10,
+  uav11,
+  uav12,
+  uav13,
+  uav14,
+  uav15,
+  uav16,
+  uav17,
+  uav18,
+  uav19,
+  uav20,
+  uav21,
+  uav22,
+  uav23,
+  uav24,
+  uav25,
+  uav26,
+  uav27,
+  uav28,
+  uav29,
+  uav30,
+  uav31,
+  uav32,
+  uav33,
+  uav34,
+  uav35,
+  uav36,
+  uav37,
+  uav38,
+  uav39,
+  uav40,
+  uav41,
+  uav42,
+  uav43,
+  uav44,
+  uav45,
+  uav46,
+  uav47,
+  uav48,
+  uav49,
+  uav50,
+]
+
+uav1:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav2:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav3:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav4:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav5:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav6:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav7:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav8:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav9:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav10:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav11:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav12:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav13:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav14:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav15:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav16:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav17:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav18:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav19:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav20:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav21:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav22:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav23:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav24:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav25:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav26:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav27:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav28:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav29:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav30:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav31:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav32:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav33:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav34:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav35:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav36:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav37:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav38:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav39:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav40:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav41:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav42:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav43:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav44:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav45:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav46:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav47:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav48:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav49:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+uav50:
+  type: "x500"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 2.0
+    heading: 0
+
+
