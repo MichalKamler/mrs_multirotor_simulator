@@ -1,0 +1,81 @@
+mrs_uav_managers:
+
+  estimation_manager:
+
+    # loaded state estimator plugins
+    state_estimators: [
+      "gps_baro",
+    ]
+
+    initial_state_estimator: "gps_baro" # will be used as the first state estimator
+    agl_height_estimator: "" # only slightly filtered height for checking min height (not used in control feedback)
+
+  uav_manager:
+
+    min_height_checking:
+      enabled: false
+
+    max_height_checking:
+      enabled: false
+
+  constraint_manager:
+
+    default_constraints:
+      gps_baro: "slow"
+
+  control_manager:
+
+    Se3Controller:
+      eland_threshold: 4.0 # [m], position error triggering eland
+      failsafe_threshold: 6.0 # [m], position error triggering failsafe land
+      odometry_innovation_threshold: 1.5 # [m], position odometry innovation threshold
+
+mrs_uav_trackers: 
+
+  mpc_tracker:
+    
+    collision_avoidance:
+
+      enabled:  false
+      enabled_failsafe: false
+      # radius: 1.0
+      # correction: 0.5 
+
+# mrs_uav_managers:
+
+#   constraint_manager:
+
+#     fast:
+
+#       horizontal:
+#         speed: 8.0
+#         acceleration: 4.0
+#         jerk: 60.0
+#         snap: 60.0
+
+#       vertical:
+
+#         ascending:
+#           speed: 4.0
+#           acceleration: 2.0
+#           jerk: 60.0
+#           snap: 60.0
+
+#         descending:
+#           speed: 4.0
+#           acceleration: 2.0
+#           jerk: 60.0
+#           snap: 60.0
+
+#       heading:
+#         speed: 2.0
+#         acceleration: 2.0
+#         jerk: 40.0
+#         snap: 40.0
+
+#       angular_speed:
+#         roll: 60.0
+#         pitch: 60.0
+#         yaw: 10.0
+
+#       tilt: 60.0 # [deg]

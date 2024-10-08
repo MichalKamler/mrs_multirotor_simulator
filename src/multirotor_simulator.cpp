@@ -126,7 +126,7 @@ private:
   double BET1;
   double BET2;
   double R;
-  int LIST_SIZE;
+  int VIS_FIELD_SIZE;
 };
 
 void MultirotorSimulator::onInit() {
@@ -169,7 +169,7 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("fish_model_params/BET2",BET2);
   param_loader.loadParam("fish_model_params/V0",V0);
   param_loader.loadParam("fish_model_params/R",R);
-  param_loader.loadParam("fish_model_params/LIST_SIZE",LIST_SIZE);
+  param_loader.loadParam("fish_model_params/VIS_FIELD_SIZE",VIS_FIELD_SIZE);
 
   double clock_rate;
   param_loader.loadParam("clock_rate", clock_rate);
@@ -442,8 +442,8 @@ void MultirotorSimulator::updateVelocities(void){
     double vx_local = uavs_odom[i][3];  // local x velocity
     double vy_local = uavs_odom[i][4];  // local y velocity
 
-    Eigen::VectorXd visual_field_i_uav = Eigen::VectorXd::Zero(LIST_SIZE);
-    Eigen::VectorXd phi = Eigen::VectorXd::LinSpaced(LIST_SIZE, -M_PI, M_PI);
+    Eigen::VectorXd visual_field_i_uav = Eigen::VectorXd::Zero(VIS_FIELD_SIZE);
+    Eigen::VectorXd phi = Eigen::VectorXd::LinSpaced(VIS_FIELD_SIZE, -M_PI, M_PI);
     
     double vel_norm = sqrt(pow(vx_local ,2) + pow(vx_local,2)); //norm of velocity
     double vx_global = vx_local * cos(yaw) - vy_local * sin(yaw);
@@ -513,7 +513,7 @@ Eigen::VectorXd MultirotorSimulator::dPhi_V_of(const Eigen::VectorXd &Phi, const
 }
 
 std::pair<double, double> MultirotorSimulator::compute_state_variables(double vel_now, const Eigen::VectorXd &Phi, const Eigen::VectorXd &V_now) {    
-  double dPhi = (2*M_PI)/LIST_SIZE;
+  double dPhi = (2*M_PI)/VIS_FIELD_SIZE;
     
   Eigen::VectorXd dPhi_V = dPhi_V_of(Phi, V_now);
   
@@ -526,8 +526,8 @@ std::pair<double, double> MultirotorSimulator::compute_state_variables(double ve
   Eigen::ArrayXd integrand_dvel = G * cos_phi;
   Eigen::ArrayXd integrand_dpsi = G * sin_phi;
 
-  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, LIST_SIZE - 2).sum() + 0.5 * integrand_dvel[LIST_SIZE - 1]);
-  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, LIST_SIZE - 2).sum() + 0.5 * integrand_dpsi[LIST_SIZE - 1]);
+  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dvel[VIS_FIELD_SIZE - 1]);
+  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dpsi[VIS_FIELD_SIZE - 1]);
 
   double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum();
   double dpsi = BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum();
@@ -551,12 +551,12 @@ void MultirotorSimulator::compute_visual_field(int id_uav, Eigen::VectorXd &V_i,
       double dPhi_i_j = atan(R / d_i_j);
 
       double angle_uav_frame = atan2( sin(Phi_i_j - psi), cos(Phi_i_j - psi) );
-      int center_j = (angle_uav_frame + M_PI) / (2 * M_PI / (LIST_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-      int half_angle_width = static_cast<int>(dPhi_i_j / (2 * M_PI / (LIST_SIZE - 1)));
+      int center_j = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+      int half_angle_width = static_cast<int>(dPhi_i_j / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
 
       for (unsigned int k = 0; k <= 2 * half_angle_width; k++) {
         if(d_i_j>R){
-          int idx = (center_j - half_angle_width + k + LIST_SIZE) % LIST_SIZE;
+          int idx = (center_j - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
           V_i[idx] = 1;
         }else{
           ROS_ERROR("uav_i above or under uav_i");

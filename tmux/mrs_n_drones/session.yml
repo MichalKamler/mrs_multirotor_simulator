@@ -1,0 +1,86 @@
+# do not modify these
+root: ./
+name: simulation
+socket_name: mrs
+attach: false
+tmux_options: -f /etc/ctu-mrs/tmux.conf
+# you can modify these
+pre_window: export UAV_NAME=uav1; export RUN_TYPE=simulation; export UAV_TYPE=x500; export BOND=false; export CUSTOM_CONFIG=./config/custom_config.yaml; export WORLD_CONFIG=./config/world_config.yaml; export NETWORK_CONFIG=./config/network_config.yaml; export PLATFORM_CONFIG=`rospack find mrs_multirotor_simulator`/config/mrs_uav_system/$UAV_TYPE.yaml
+startup_window: goto
+windows:
+  - roscore:
+      layout: tiled
+      panes:
+        - roscore
+  - simulator:
+      layout: tiled
+      panes:
+        - waitForRos; roslaunch mrs_multirotor_simulator multirotor_simulator.launch custom_config:=./config/simulator.yaml
+  - hw_api:
+      layout: tiled
+      panes:
+        - ./launch_hw_api.sh 1 3
+        - ./launch_hw_api.sh 4 6
+        - ./launch_hw_api.sh 7 9
+        - ./launch_hw_api.sh 10 12
+        - ./launch_hw_api.sh 13 15
+        - ./launch_hw_api.sh 16 18
+        - ./launch_hw_api.sh 19 21
+        - ./launch_hw_api.sh 22 24
+        - ./launch_hw_api.sh 25 27
+        - ./launch_hw_api.sh 28 30
+  - control:
+      layout: tiled
+      panes:
+        - ./launch_control.sh 1 3
+        - ./launch_control.sh 4 6
+        - ./launch_control.sh 7 9
+        - ./launch_control.sh 10 12
+        - ./launch_control.sh 13 15
+        - ./launch_control.sh 16 18
+        - ./launch_control.sh 19 21
+        - ./launch_control.sh 22 24
+        - ./launch_control.sh 25 27
+        - ./launch_control.sh 28 30
+  - automatic_start:
+      layout: tiled
+      panes:
+        - ./launch_automatic_start.sh 1 3 
+        - ./launch_automatic_start.sh 4 6
+        - ./launch_automatic_start.sh 7 9 
+        - ./launch_automatic_start.sh 10 12
+        - ./launch_automatic_start.sh 13 15 
+        - ./launch_automatic_start.sh 16 18
+        - ./launch_automatic_start.sh 19 21
+        - ./launch_automatic_start.sh 22 24 
+        - ./launch_automatic_start.sh 25 27
+        - ./launch_automatic_start.sh 28 30 
+  - goto:    
+      layout: tiled
+      panes:
+        - 'history -s ./goto.py'
+  - activation:
+      layout: tiled
+      panes:
+        - waitForControl; history -s rosservice call /multirotor_simulator/activation  
+  - takeoff:
+      layout: tiled
+      panes:
+        - ./takeoff.sh 1 3 
+        - ./takeoff.sh 4 6
+        - ./takeoff.sh 7 9
+        - ./takeoff.sh 10 12
+        - ./takeoff.sh 13 15
+        - ./takeoff.sh 16 18
+        - ./takeoff.sh 19 21
+        - ./takeoff.sh 22 24
+        - ./takeoff.sh 25 27
+        - ./takeoff.sh 28 30
+  - rviz:
+      layout: tiled
+      panes:
+        - waitForControl; rosrun rviz rviz -d ./rviz.rviz
+  - layout:
+      layout: tiled
+      panes:
+        - waitForControl; sleep 5; ~/.i3/layout_manager.sh ./layout.json

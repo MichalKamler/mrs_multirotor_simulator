@@ -51,12 +51,24 @@ individual_takeoff_platform:
 
 fish_model_params:
   GAM: 0.1
-  ALP0: 0.05 # long range interaction            controls the overallacceleration-deceleration response
-  ALP1: 0.08 #short range interaction
+  ALP0: 0.1
+  ALP1: 0.08 
   ALP2: 0
-  BET0: 1 # long range interaction          controls the overall turning response
-  BET1: 0.08  #short range interaction  - repulsion
+  BET0: 0.02
+  BET1: 0.08  
   BET2: 0
   V0: 1 # [m/s]
   R: 1   # [m]  
-  LIST_SIZE: 16384
+  VIS_FIELD_SIZE: 4096 #16384
+
+# fish_model_params:
+#   GAM: 0.1
+#   ALP0: 0.05 # long range interaction            controls the overallacceleration-deceleration response
+#   ALP1: 0.08 #short range interaction
+#   ALP2: 0
+#   BET0: 1 # long range interaction          controls the overall turning response
+#   BET1: 0.08  #short range interaction  - repulsion
+#   BET2: 0
+#   V0: 1 # [m/s]
+#   R: 1   # [m]  
+#   VIS_FIELD_SIZE: 4096 #16384
