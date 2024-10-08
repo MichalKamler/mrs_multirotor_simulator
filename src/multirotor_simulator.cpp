@@ -106,12 +106,12 @@ private:
 
   Eigen::VectorXd dPhi_V_of(const Eigen::VectorXd &Phi, const Eigen::VectorXd &V);
   std::pair<double, double> compute_state_variables(double vel_now, const Eigen::VectorXd &Phi, const Eigen::VectorXd &V_now);
-
   void compute_visual_field(int id_uav, Eigen::VectorXd &visual_field, double uav_heading);
 
-  void plot_visual_field(const std::vector<bool>& visual_field);
-
   void updateUavsOdomVec(void);
+
+  void block_V_field(Eigen::VectorXd &V_i, double psi, double x, double y);
+  void block_part_of_V_field(Eigen::VectorXd &V_i, int half_angle_width, int center);
 
   bool activationServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res);
   ros::ServiceServer service_activate_control_;
@@ -127,6 +127,11 @@ private:
   double BET2;
   double R;
   int VIS_FIELD_SIZE;
+
+  bool USE_BOUNDARY_BOX;
+  double BOX_WIDTH;
+  double BOX_LENGHT;
+  double SQUARE_AROUND_UAV;
 };
 
 void MultirotorSimulator::onInit() {
@@ -170,7 +175,11 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("fish_model_params/V0",V0);
   param_loader.loadParam("fish_model_params/R",R);
   param_loader.loadParam("fish_model_params/VIS_FIELD_SIZE",VIS_FIELD_SIZE);
-
+  param_loader.loadParam("boundary_box/BOX_WIDTH",BOX_WIDTH);
+  param_loader.loadParam("boundary_box/BOX_LENGHT",BOX_LENGHT);
+  param_loader.loadParam("boundary_box/USE_BOUNDARY_BOX",USE_BOUNDARY_BOX);
+  param_loader.loadParam("boundary_box/SQUARE_AROUND_UAV",SQUARE_AROUND_UAV);
+  
   double clock_rate;
   param_loader.loadParam("clock_rate", clock_rate);
 
@@ -438,6 +447,8 @@ void MultirotorSimulator::updateVelocities(void){
 
   updateUavsOdomVec();
   for (size_t i = 0; i < uavs_.size(); i++) { 
+    double x_i = uavs_odom[i][0];
+    double y_i = uavs_odom[i][1];
     double yaw = uavs_odom[i][6];
     double vx_local = uavs_odom[i][3];  // local x velocity
     double vy_local = uavs_odom[i][4];  // local y velocity
@@ -451,6 +462,10 @@ void MultirotorSimulator::updateVelocities(void){
     double uav_vel_heading = atan2(vy_global, vx_global); //global coord heading
 
     compute_visual_field(i, visual_field_i_uav, uav_vel_heading);
+
+    if(USE_BOUNDARY_BOX){
+      block_V_field(visual_field_i_uav, uav_vel_heading, x_i, y_i);
+    }
 
     auto dvel_dpsi = compute_state_variables(vel_norm, phi, visual_field_i_uav);
 
@@ -579,6 +594,52 @@ bool MultirotorSimulator::activationServiceCallback(std_srvs::Trigger::Request &
   }
   return true;
 }
+
+void MultirotorSimulator::block_V_field(Eigen::VectorXd &V_i, double psi, double x, double y){
+  /*
+  x, y - cur pos of uav
+  psi - velocity heading
+  V_i - visual field
+  */
+  if(!USE_BOUNDARY_BOX){
+    return;
+  }
+  double sq = SQUARE_AROUND_UAV/2;
+  double w = BOX_WIDTH/2;
+  double l = BOX_LENGHT/2;
+
+  if(x+sq >= w){
+    double angle_uav_frame = atan2( sin(0 - psi), cos(0 - psi) );
+    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
+    block_part_of_V_field(V_i, half_angle_width, center);
+  }else if(x-sq <= -w){
+    double angle_uav_frame = atan2( sin(-M_PI - psi), cos(-M_PI - psi) );
+    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
+    block_part_of_V_field(V_i, half_angle_width, center);
+  }
+
+  if(y+sq >= l){
+    double angle_uav_frame = atan2( sin(M_PI_2 - psi), cos(M_PI_2 - psi) );
+    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
+    block_part_of_V_field(V_i, half_angle_width, center);
+  }else if(y-sq <= -l){
+    double angle_uav_frame = atan2( sin(-M_PI_2 - psi), cos(-M_PI_2 - psi) );
+    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
+    block_part_of_V_field(V_i, half_angle_width, center);
+  }
+}
+
+void MultirotorSimulator::block_part_of_V_field(Eigen::VectorXd &V_i, int half_angle_width, int center){
+  for (unsigned int k = 0; k <= 2 * half_angle_width; k++) {
+    int idx = (center - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
+    V_i[idx] = 1;
+  }
+}
+
 
 }
 
