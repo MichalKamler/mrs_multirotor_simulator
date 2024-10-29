@@ -1,68 +1,48 @@
-simulation_rate: 100.0 # Hz
-clock_rate: 100.0 # Hz
-realtime_factor: 1.0 # [-]
-
-# when true, the simulation time will get initialized from wall time
-sim_time_from_wall_time: true
-
-g: 9.81 # [ms^-2]
-
-iterate_without_input: true
-
-input_timeout: 1.0 # [s]
-
+boundary_box:
+  BOX_LENGHT: 30.0
+  BOX_WIDTH: 30.0
+  SQUARE_AROUND_UAV: 1.0
+  USE_BOUNDARY_BOX: true
+clock_rate: 100.0
+collisions:
+  crash: false
+  enabled: false
+  rebounce: 100.0
+fish_model_params:
+  ALP0: 1
+  ALP1: 0.08
+  ALP2: 0.5
+  BET0: 0.5
+  BET1: 0.08
+  BET2: 0.5
+  GAM: 0.1
+  R: 1
+  V0: 1
+  VIS_FIELD_SIZE: 4096
 frames:
-  world:
-    name: "simulator_origin"
-    prefix_with_uav_name: false
   fcu:
-    name: "fcu"
+    name: fcu
     publish_tf: false
   rangefinder:
-    name: "garmin"
+    name: garmin
     publish_tf: true
-
-collisions:
+  world:
+    name: simulator_origin
+    prefix_with_uav_name: false
+g: 9.81
+ground:
+  enabled: true
+  z: 0.0
+individual_takeoff_platform:
   enabled: false
-  crash: false
-
-  # if crash==false, then the collisions are elastic
-  rebounce: 100.0
-
-# randomization of the initial conditions around the desired spawn point
+input_timeout: 1.0
+iterate_without_input: true
 randomization:
-
-  enabled: false
-
   bounds:
     x: 15.0
     y: 15.0
     z: 15.0
-
-ground:
-  enabled: true
-  z: 0.0 # [m]
-
-# * when enabled, this will place a temporary patch of ground just under the spawn location
-# * this patch will disappear after the total_thrust > 0.9*hover_thrust
-individual_takeoff_platform:
   enabled: false
-
-
-fish_model_params:
-  GAM: 0.1
-  ALP0: 1
-  ALP1: 0.08 
-  ALP2: 0
-  BET0: 0.5
-  BET1: 0.08  
-  BET2: 0
-  V0: 1 # [m/s]
-  R: 1   # [m]  
-  VIS_FIELD_SIZE: 4096 #16384
-
-boundary_box:
-  USE_BOUNDARY_BOX: true 
-  BOX_WIDTH: 30.0 # [m]
-  BOX_LENGHT: 30.0 # [m]
-  SQUARE_AROUND_UAV: 1.0 # [m]
+realtime_factor: 1.0
+sim_time_from_wall_time: true
+simulation_rate: 100.0
