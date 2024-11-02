@@ -573,61 +573,78 @@ Eigen::Vector3d MultirotorSimulator::compute_state_variables_3d(double vel_now, 
   return Eigen::Vector3d(dvel, dpsi, dvel_z);;
 }
 
+// Eigen::Vector3d MultirotorSimulator:: compute_dvel_dpsi_dvz_1_uav(double dist, double a_2, double phi_uav, double theta_uav, double vel_now){
+//   int center_j = (phi_uav + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+//   int half_angle_width = static_cast<int>(a_2 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
 
-Eigen::Vector3d MultirotorSimulator:: compute_dvel_dpsi_dvz_1_uav(double dist, double a_2, double phi_uav, double theta_uav, double vel_now){
-  int center_j = (phi_uav + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-  int half_angle_width = static_cast<int>(a_2 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
+//   Eigen::VectorXd Phi = Eigen::VectorXd::LinSpaced(VIS_FIELD_SIZE, -M_PI, M_PI);
 
-  Eigen::VectorXd Phi = Eigen::VectorXd::LinSpaced(VIS_FIELD_SIZE, -M_PI, M_PI);
+//   Eigen::VectorXd V_i = Eigen::VectorXd::Zero(VIS_FIELD_SIZE);
+//   for (unsigned int k = 0; k <= 2 * half_angle_width; k++) {
+//     if(dist>R){
+//       int idx = (center_j - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
+//       V_i[idx] = 1;
+//     }else{
+//       ROS_ERROR("uav_i above or under uav_i");
+//     }
+//   }
+//   double dPhi = (2*M_PI)/VIS_FIELD_SIZE;
 
-  Eigen::VectorXd V_i = Eigen::VectorXd::Zero(VIS_FIELD_SIZE);
-  for (unsigned int k = 0; k <= 2 * half_angle_width; k++) {
-    if(dist>R){
-      int idx = (center_j - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
-      V_i[idx] = 1;
-    }else{
-      ROS_ERROR("uav_i above or under uav_i");
-    }
-  }
-  double dPhi = (2*M_PI)/VIS_FIELD_SIZE;
-
-  Eigen::VectorXd dPhi_V = dPhi_V_of(Phi, V_i);
+//   Eigen::VectorXd dPhi_V = dPhi_V_of(Phi, V_i);
   
-  Eigen::ArrayXd G_vel = -V_i.array();
-  Eigen::ArrayXd G_psi = -V_i.array();
-  Eigen::ArrayXd G_spike = dPhi_V.array().square();
+//   Eigen::ArrayXd G_vel = -V_i.array();
+//   Eigen::ArrayXd G_psi = -V_i.array();
+//   Eigen::ArrayXd G_spike = dPhi_V.array().square();
   
-  Eigen::ArrayXd cos_phi = Phi.array().cos();
-  Eigen::ArrayXd sin_phi = Phi.array().sin();
+//   Eigen::ArrayXd cos_phi = Phi.array().cos();
+//   Eigen::ArrayXd sin_phi = Phi.array().sin();
 
-  Eigen::ArrayXd integrand_dvel = G_vel * cos_phi;
-  Eigen::ArrayXd integrand_dpsi = G_psi * sin_phi;
+//   Eigen::ArrayXd integrand_dvel = G_vel * cos_phi;
+//   Eigen::ArrayXd integrand_dpsi = G_psi * sin_phi;
 
-  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dvel[VIS_FIELD_SIZE - 1]);
-  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dpsi[VIS_FIELD_SIZE - 1]);
+//   double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dvel[VIS_FIELD_SIZE - 1]);
+//   double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dpsi[VIS_FIELD_SIZE - 1]);
 
-  double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum();
-  double dpsi = BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum();
-  double dvz = 0;
-  return Eigen::Vector3d(dvel, dpsi, dvz);
-}
+//   double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum();
+//   double dpsi = BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum();
+//   double dvz = 0;
+//   return Eigen::Vector3d(dvel, dpsi, dvz);
+// }
+
+
+// ∂t vψi(t ) = ∫−π/2π/2d θi cos θi ∫−ππd ϕi cos ϕi α0(−Vi( ϕi, θi, t ) +α1 ( ∂ϕi Vi( ϕi, θi,t ) )2 ) + γ(v0 − vi(t ) )
 
 double MultirotorSimulator::compute_dvel_3d(double a_2, double phi_uav, double theta_uav){
   double dvel = 0;
-  double dvel_theta_part = 0;
-  for (double phi = phi_uav-a_2; phi < phi_uav+a_2; phi += D_PHI){ // p as phi 
-    dvel_theta_part = 0;
-    for (double theta = theta_uav-a_2; theta < theta_uav+a_2; theta += D_THETA){ //t as theta 
-      // dvel_theta_part += D_THETA*cos(theta)*D_PHI*cos(phi)*ALP0*(-1); //reaction to mass
-      dvel_theta_part += cos(theta)*cos(phi)*ALP0*(-1); //reaction to mass
+  double phi_part = 0;
+  for (double theta = theta_uav-a_2; theta < theta_uav+a_2; theta += D_THETA){ //t as theta     
+    phi_part = 0;
+    for (double phi = phi_uav-a_2; phi < phi_uav+a_2; phi += D_PHI){ // p as phi 
+      phi_part += cos(phi) * ALP0 * (-1);
     }
-    dvel += dvel_theta_part*D_THETA;
+    dvel += D_PHI * phi_part;
   }
-  dvel *= D_PHI;
+  dvel *= D_THETA;
   dvel += cos(theta_uav)*ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2));   //!!! reaction to edges only left right rigt now 
-  ROS_INFO("3d dvel edge is: %.3f without the costheta: %.3f", cos(theta_uav)*ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2)), ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2)));
   return dvel;
 }
+
+// double MultirotorSimulator::compute_dvel_3d(double a_2, double phi_uav, double theta_uav){
+//   double dvel = 0;
+//   double dvel_theta_part = 0;
+//   for (double phi = phi_uav-a_2; phi < phi_uav+a_2; phi += D_PHI){ // p as phi 
+//     dvel_theta_part = 0;
+//     for (double theta = theta_uav-a_2; theta < theta_uav+a_2; theta += D_THETA){ //t as theta 
+//       // dvel_theta_part += D_THETA*cos(theta)*D_PHI*cos(phi)*ALP0*(-1); //reaction to mass
+//       dvel_theta_part += cos(theta)*cos(phi)*ALP0*(-1); //reaction to mass
+//     }
+//     dvel += dvel_theta_part*D_THETA;
+//   }
+//   dvel *= D_PHI;
+//   dvel += cos(theta_uav)*ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2));   //!!! reaction to edges only left right rigt now 
+//   ROS_INFO("3d dvel edge is: %.3f without the costheta: %.3f", cos(theta_uav)*ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2)), ALP0*ALP1*(cos(phi_uav-a_2) + cos(phi_uav+a_2)));
+//   return dvel;
+// }
 
 double MultirotorSimulator::compute_dpsi_3d(double a_2, double phi_uav, double theta_uav){
   double dpsi = 0;
