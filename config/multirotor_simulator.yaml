@@ -11,14 +11,20 @@ collisions:
 fish_model_params:
   ALP0: 1
   ALP1: 0.08
-  ALP2: 0.5
+  ALP2: 0
   BET0: 0.5
   BET1: 0.08
-  BET2: 0.5
+  BET2: 0
+  LAM0: 1
+  LAM1: 1
+  LAM2: 0
   GAM: 0.1
   R: 1
   V0: 1
   VIS_FIELD_SIZE: 4096
+  D_PHI: 4096
+  D_THETA: 1024
+  USE_3D: true
 frames:
   fcu:
     name: fcu
