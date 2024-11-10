@@ -22,9 +22,9 @@ fish_model_params:
   R: 1
   V0: 1
   VIS_FIELD_SIZE: 4096
-  PHI_SIZE: 1024 #4096
-  THETA_SIZE: 512 #1024
-  USE_3D: true  
+  D_PHI: 4096
+  D_THETA: 1024
+  USE_3D: true
 frames:
   fcu:
     name: fcu
