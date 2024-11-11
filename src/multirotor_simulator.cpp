@@ -546,15 +546,18 @@ void MultirotorSimulator::updateVelocities_3d(void){
     std::vector<Eigen::Vector3d> local_frame_coords = recalculate_uavs_positions_to_uavi_frame(psi, i);
 
     V_spherical Vi_spherical = V_spherical(PHI_SIZE, THETA_SIZE);
-    if(i==0){
-      update_3_d_V_field(Vi_spherical, local_frame_coords); //TODO
-    }
+    // if(i==0){
+    //   update_3_d_V_field(Vi_spherical, local_frame_coords); //TODO
+    // }
+    update_3_d_V_field(Vi_spherical, local_frame_coords); //TODO
+
+    // Vi_spherical.printField();
     
 
-    if (!written_to_csv){ //DEL
-      writeToCSV("output.csv"  , Vi_spherical.field);
-      written_to_csv = true;
-    } 
+    // if (!written_to_csv){ //DEL
+    //   writeToCSV("output.csv"  , Vi_spherical.field);
+    //   written_to_csv = true;
+    // } 
 
     state_var = compute_state_variables_3d_2_point_0(vel_norm, Vi_spherical);
 
@@ -623,15 +626,12 @@ void MultirotorSimulator::update_3_d_V_field(V_spherical &visual_field, std::vec
     double a_2 = atan(R/dist); //"widht height" of the circle in the visual field in rad, a_2 as half of the angle i need to iterate through
     double phi_uav = atan2(y, x);
     double theta_uav = atan(z/sqrt(pow(x,2)+pow(y,2)));
-
-    ROS_INFO("a2: %.3f, phi_uav: %.3f, theta_uav: %.3f", a_2, phi_uav, theta_uav);
-    int phi_min = static_cast<int>((std::fmod(phi_uav - a_2 + 2 * M_PI, 2 * M_PI) + M_PI) / (2 * M_PI / (PHI_SIZE - 1)));
-    int phi_max = static_cast<int>((std::fmod(phi_uav + a_2 + 2 * M_PI, 2 * M_PI) + M_PI) / (2 * M_PI / (PHI_SIZE - 1)));
-    int theta_min = static_cast<int>((std::fmod(theta_uav - a_2 + M_PI_2, M_PI)) / (M_PI / (THETA_SIZE - 1)));
-    int theta_max = static_cast<int>((std::fmod(theta_uav + a_2 + M_PI_2, M_PI)) / (M_PI / (THETA_SIZE - 1)));
-    ROS_INFO("phi_min: %d, phi_max: %d, theta_min: %d, theta_max: %d", phi_min, phi_max, theta_min, theta_max);
-
-
+    // ROS_INFO("a2: %.3f, phi_uav: %.3f, theta_uav: %.3f", a_2, phi_uav, theta_uav);
+    // int phi_min = static_cast<int>(fmod((fmod(phi_uav - a_2, 2 * M_PI) + 2 * M_PI), 2 * M_PI) / (2 * M_PI / (PHI_SIZE - 1)));
+    // int phi_max = static_cast<int>(fmod((fmod(phi_uav + a_2, 2 * M_PI) + 2 * M_PI), 2 * M_PI) / (2 * M_PI / (PHI_SIZE - 1)));
+    // int theta_min = static_cast<int>(fmod((fmod(theta_uav - a_2, M_PI) + M_PI), M_PI) / (M_PI / (THETA_SIZE - 1)));
+    // int theta_max = static_cast<int>(fmod((fmod(theta_uav - a_2, M_PI) + M_PI), M_PI) / (M_PI / (THETA_SIZE - 1)));
+    // ROS_INFO("phi_min: %d, phi_max: %d, theta_min: %d, theta_max: %d", phi_min, phi_max, theta_min, theta_max);
     visual_field.updateSphericalCap(phi_uav, theta_uav, a_2);
   }
 }
@@ -647,7 +647,7 @@ Eigen::Vector3d MultirotorSimulator::compute_state_variables_3d_2_point_0(double
     Eigen::VectorXd V_row = visual_field.field.row(i).cast<double>(); //visual row
     Eigen::VectorXd dPhi_V = dPhi_V_of(phi_lin_spaced, V_row); 
 
-    if (i==THETA_SIZE/2){
+    if (V_row.sum()>0){
       ROS_INFO("HUDRY MUDRY DURDRY: %.3f", V_row.sum());
     }
 
