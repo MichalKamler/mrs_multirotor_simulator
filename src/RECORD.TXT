@@ -1,0 +1,5 @@
+rosbag record -O subset /multirotor_simulator/uav_poses
+
+
+comment this line in /launch/multirotor_simulator: <remap from="~uav_poses_out" to="~uav_poses" />
+rosbag play -r 2 subset.bag

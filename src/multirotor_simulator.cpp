@@ -22,6 +22,7 @@
 #include <mrs_msgs/ReferenceStamped.h>
 #include <std_srvs/Trigger.h>
 
+#include <algorithm>
 
 #include "visual_field_spherical.h" 
 
@@ -130,6 +131,7 @@ private:
   Eigen::Vector3d compute_state_variables_3d(double vel_now, V_spherical visual_field);
   void writeToCSV(const std::string& filename, Eigen::MatrixXi field);
   void block_V_field(V_spherical &visual_field, double psi, double x, double y, double z);
+  Eigen::VectorXd dTheta_V_oF(V_spherical &V, int row_idx);
 
   Eigen::ArrayXd cos_phi;
   Eigen::ArrayXd sin_phi;
@@ -146,16 +148,17 @@ private:
   double GAM;
   double V0;                                                  
   double ALP0;
-  double ALP1;
-  double ALP2;
+  double ALP1_LR;
+  double ALP1_UD;
   double BET0;
-  double BET1;
-  double BET2;
+  double BET1_LR;
+  double BET1_UD;
   double LAM0;
-  double LAM1;
-  double LAM2;
+  double LAM1_LR;
+  double LAM1_UD;
   double R;
   int VIS_FIELD_SIZE;
+  double RELAX_RATE_VZ;
 
   bool USE_3D;
 
@@ -163,6 +166,7 @@ private:
   double D_THETA;
 
   bool USE_BOUNDARY_BOX;
+  bool USE_BOUNDARY_BOX_ONLYZ;
   double BOX_WIDTH;
   double BOX_LENGHT;
   double BOX_HEIGHT;
@@ -203,14 +207,14 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("frames/world/name", _world_frame_name_);
   param_loader.loadParam("fish_model_params/GAM",GAM);
   param_loader.loadParam("fish_model_params/ALP0",ALP0);
-  param_loader.loadParam("fish_model_params/ALP1",ALP1);
-  param_loader.loadParam("fish_model_params/ALP2",ALP2);
+  param_loader.loadParam("fish_model_params/ALP1_LR",ALP1_LR);
+  param_loader.loadParam("fish_model_params/ALP1_UD",ALP1_UD);
   param_loader.loadParam("fish_model_params/BET0",BET0);
-  param_loader.loadParam("fish_model_params/BET1",BET1);
-  param_loader.loadParam("fish_model_params/BET2",BET2);
+  param_loader.loadParam("fish_model_params/BET1_LR",BET1_LR);
+  param_loader.loadParam("fish_model_params/BET1_UD",BET1_UD);
   param_loader.loadParam("fish_model_params/LAM0",LAM0);
-  param_loader.loadParam("fish_model_params/LAM1",LAM1);
-  param_loader.loadParam("fish_model_params/LAM2",LAM2);
+  param_loader.loadParam("fish_model_params/LAM1_LR",LAM1_LR);
+  param_loader.loadParam("fish_model_params/LAM1_UD",LAM1_UD);
   param_loader.loadParam("fish_model_params/V0",V0);
   param_loader.loadParam("fish_model_params/R",R);
   param_loader.loadParam("fish_model_params/VIS_FIELD_SIZE",VIS_FIELD_SIZE);
@@ -219,10 +223,14 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("boundary_box/BOX_HEIGHT",BOX_HEIGHT);
   param_loader.loadParam("boundary_box/BOX_ABOVE_GROUND",BOX_ABOVE_GROUND);
   param_loader.loadParam("boundary_box/USE_BOUNDARY_BOX",USE_BOUNDARY_BOX);
+  param_loader.loadParam("boundary_box/USE_BOUNDARY_BOX_ONLYZ",USE_BOUNDARY_BOX_ONLYZ);
   param_loader.loadParam("boundary_box/SQUARE_AROUND_UAV",SQUARE_AROUND_UAV);
   param_loader.loadParam("fish_model_params/USE_3D",USE_3D);
   param_loader.loadParam("fish_model_params/PHI_SIZE",PHI_SIZE);
   param_loader.loadParam("fish_model_params/THETA_SIZE",THETA_SIZE);
+  param_loader.loadParam("fish_model_params/RELAX_RATE_VZ",RELAX_RATE_VZ);
+
+  RELAX_RATE_VZ = pow(RELAX_RATE_VZ, 1/_simulation_rate_);
 
   D_PHI = (2*M_PI)/PHI_SIZE;
   D_THETA = M_PI/THETA_SIZE;
@@ -519,6 +527,49 @@ void MultirotorSimulator::updateVelocities_3d(void){
     double vy_global = vx_local * sin(yaw) + vy_local * cos(yaw);
     double psi = atan2(vy_global, vx_global); //global coord heading
 
+
+
+
+
+
+    // Eigen::Vector3d state_var; //norm of dv_i, d_psi, dvz
+    // V_spherical Vi_spherical = V_spherical(PHI_SIZE, THETA_SIZE);
+    // // Vi_spherical.updateSphericalCap(0, M_PI_2, M_PI_4);
+
+    // block_V_field(Vi_spherical, 0, 50, 0, 5);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for front block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+    
+    // block_V_field(Vi_spherical, 0, -50, 0, 5);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for back block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+
+    // block_V_field(Vi_spherical, 0, 0, 50, 5);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for left block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+
+    // block_V_field(Vi_spherical, 0, 0, -50, 5);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for right block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+
+    // block_V_field(Vi_spherical, 0, 0, 0, 10);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for up block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+
+    // block_V_field(Vi_spherical, 0, 0, 0, 0);
+    // state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    // ROS_INFO("dvel: %.5f, dpsi: %.5f, dvz: %.5f for down block", state_var[0], state_var[1], state_var[2]);
+    // Vi_spherical.field.setZero();
+
+    // exit(0);
+
+
+
     Eigen::Vector3d state_var; //norm of dv_i, d_psi, dvz
     std::vector<Eigen::Vector3d> local_frame_coords = recalculate_uavs_positions_to_uavi_frame(psi, i); //yaw just for testing should be psi
 
@@ -526,21 +577,21 @@ void MultirotorSimulator::updateVelocities_3d(void){
 
     update_3_d_V_field(Vi_spherical, local_frame_coords); //Updates the sphere represention with the detected drones
 
-    if(USE_BOUNDARY_BOX){
+    if (USE_BOUNDARY_BOX || USE_BOUNDARY_BOX_ONLYZ){
       block_V_field(Vi_spherical, psi, x_i, y_i, z_i); //updates sphere visual field if drone near edge
     }
 
     state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
+    double dt = 1.0 / _simulation_rate_; 
 
-    vel_norm = vel_norm + state_var(0);
+    vel_norm = std::max(1.5, std::min(-1.5, vel_norm + state_var(0)));
     psi = psi + state_var(1);
-
+    
     vel_srv_.request.reference.reference.velocity.x = vel_norm * cos(psi); //global coords set up
     vel_srv_.request.reference.reference.velocity.y = vel_norm * sin(psi); 
-    // vel_srv_.request.reference.reference.velocity.z = vz_global + state_var(2); 
-
+    vel_srv_.request.reference.reference.velocity.z = std::max(-0.5, std::min(0.5, vz_global + state_var(2))); 
     if (i==0){
-      ROS_INFO("x %.3f, y %.3f, z %.3f", vel_norm * cos(psi), vel_norm * sin(psi), vz_global + state_var(2));
+      ROS_INFO("velx: %.3f, vely: %.3f, velz: %.3f, psi: %.1f", vel_norm * cos(psi), vel_norm * sin(psi), vz_global + state_var(2), psi);
       ROS_INFO("dvel %.3f, dpsi %.3f, dvz %.3f", state_var(0), state_var(1), state_var(2));
     }
 
@@ -560,27 +611,33 @@ void MultirotorSimulator::block_V_field(V_spherical &visual_field, double psi, d
   double l = BOX_LENGHT/2;
 
   auto normalizeAngle = [](double angle) {
-    while (angle < -M_PI) angle += 2 * M_PI;
     while (angle > M_PI) angle -= 2 * M_PI;
+    while (angle <= -M_PI) angle += 2 * M_PI;
     return angle;
   };
+  if (USE_BOUNDARY_BOX){
+    if (x >= w){
+      // ROS_INFO("")
+      visual_field.updateSphericalCap(normalizeAngle(-psi), 0, M_PI_4);
+    }else if (x <= -w){
+      visual_field.updateSphericalCap(normalizeAngle(-M_PI-psi), 0, M_PI_4);
+    }
 
-  if (x >= w){
-    visual_field.updateSphericalCap(-psi, 0, M_PI_2);
-  }else if (x <= -w){
-    visual_field.updateSphericalCap(normalizeAngle(-M_PI-psi), 0, M_PI_2);
+    if (y >= l){
+      visual_field.updateSphericalCap(normalizeAngle(M_PI_2-psi), 0, M_PI_4);
+    }else if (y <= -l){
+      visual_field.updateSphericalCap(normalizeAngle(-M_PI_2-psi), 0, M_PI_4);
+    }
   }
-
-  if (y >= l){
-    visual_field.updateSphericalCap(normalizeAngle(M_PI_2-psi), 0, M_PI_2);
-  }else if (y <= -l){
-    visual_field.updateSphericalCap(normalizeAngle(-M_PI_2-psi), 0, M_PI_2);
-  }
-  
-  if (z >= (BOX_ABOVE_GROUND + BOX_HEIGHT)) {
-    visual_field.updateSphericalCap(0, M_PI_2, M_PI_2);
-  }else if (z <= BOX_ABOVE_GROUND){
-    visual_field.updateSphericalCap(0, -M_PI_2, M_PI_2);
+  if (USE_BOUNDARY_BOX_ONLYZ){
+    if (z >= (BOX_ABOVE_GROUND + BOX_HEIGHT)) {
+      // ROS_INFO("Drone too high updating spere cap above drone");
+      visual_field.updateSphericalCap(0, M_PI_2, M_PI_4);
+      // visual_field.saveFieldToCSV("field.csv");
+      // exit(0);
+    }else if (z <= BOX_ABOVE_GROUND){
+      visual_field.updateSphericalCap(0, -M_PI_2, M_PI_4);
+    }
   }
 
 }
@@ -631,6 +688,13 @@ void MultirotorSimulator::update_3_d_V_field(V_spherical &visual_field, std::vec
   }
 }
 
+Eigen::VectorXd MultirotorSimulator::dTheta_V_oF(V_spherical &V, int row_idx){
+  if (row_idx <= 0 || row_idx >= PHI_SIZE){
+    return Eigen::VectorXd::Zero(PHI_SIZE);
+  }
+  return V.row(row_idx) - V.row(row_idx-1);
+}
+
 Eigen::Vector3d MultirotorSimulator::compute_state_variables_3d(double vel_now, V_spherical visual_field){
   Eigen::VectorXd v_integral_by_dphi = Eigen::VectorXd::Zero(THETA_SIZE);
   Eigen::VectorXd psi_integral_by_dphi = Eigen::VectorXd::Zero(THETA_SIZE);
@@ -643,13 +707,15 @@ Eigen::Vector3d MultirotorSimulator::compute_state_variables_3d(double vel_now, 
 
     Eigen::VectorXd V_row = visual_field.field.row(i).cast<double>(); //visual row
     Eigen::VectorXd dPhi_V = dPhi_V_of(V_row); 
-
+    Eigen::VectorXd dTheta_V = dTheta_V_oF(visual_field, i);
+    // ROS_INFO("V_row: %.1f, dPhi_V: %.1f, dTheta_V: %.1f", V_row.array().sum(), dPhi_V.array().sum(), dTheta_V.array().sum());
     // if (V_row.sum()>0){
     //   ROS_INFO("HUDRY MUDRY DURDRY: %.3f", V_row.sum());
     // }
 
     Eigen::ArrayXd G = -V_row.array();
     Eigen::ArrayXd G_spike = dPhi_V.array().square();
+    Eigen::ArrayXd G_spike_UD = dTheta_V.array().square();
 
     // ROS_INFO("GSPIKE sum is: %.3f", G_spike.sum());
 
@@ -663,10 +729,15 @@ Eigen::Vector3d MultirotorSimulator::compute_state_variables_3d(double vel_now, 
     //   ROS_INFO("Integral_dvel: %.3f, integral_dpsi: %.3f, integral_dv_z: %.3f", integral_dvel, integral_dpsi, integral_dv_z);
     // }
     
+    // ROS_INFO("integral_dvel: %.5f, integral_dpsi: %.5f, integral_dv_z: %.5f", integral_dvel, integral_dpsi, integral_dv_z);
+
+    double CONSISTENCY_WITH_CUDA_ANALYSIS = PHI_SIZE/256; //256 is phi size with which the parameters were tested
     
-    v_integral_by_dphi[i] = (ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum()) * sin(angle_z_to_theta);
-    psi_integral_by_dphi[i] = (BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum()) * sin(angle_z_to_theta);
-    v_z_integral_by_dphi[i] = (LAM0 * integral_dv_z + LAM0 * LAM1 * G_spike.sum()) * sin(angle_z_to_theta);
+    v_integral_by_dphi[i] = ALP0 * (integral_dvel + ALP1_LR * (cos_phi * G_spike).sum() + ALP1_UD * (cos_phi * G_spike_UD).sum()) * sin(angle_z_to_theta);
+    psi_integral_by_dphi[i] = BET0 * (integral_dpsi + BET1_LR * (sin_phi * G_spike).sum() + BET1_UD * (sin_phi * G_spike_UD).sum()) * sin(angle_z_to_theta);
+    v_z_integral_by_dphi[i] = LAM0 * (integral_dv_z +  LAM1_LR * G_spike.sum() + LAM1_UD * (G_spike_UD.sum())/CONSISTENCY_WITH_CUDA_ANALYSIS) * sin(angle_z_to_theta);
+
+    // ROS_INFO("v_integral_by_dphi[i]: %.5f, psi_integral_by_dphi[i]: %.5f, v_z_integral_by_dphi[i]: %.5f", v_integral_by_dphi[i], psi_integral_by_dphi[i], v_z_integral_by_dphi[i]);
   }
 
   // ROS_INFO("Before cos sin theta v_integral_by_dphi: %.3f, psi_integral_by_dphi: %.3f, v_z_integral_by_dphi: %.3f ", v_integral_by_dphi.array().sum(), psi_integral_by_dphi.array().sum(), v_z_integral_by_dphi.array().sum());
@@ -820,8 +891,8 @@ std::pair<double, double> MultirotorSimulator::compute_state_variables(double ve
   double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dvel[VIS_FIELD_SIZE - 1]);
   double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dpsi[VIS_FIELD_SIZE - 1]);
 
-  double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1 * (cos_phi * G_spike).sum();
-  double dpsi = BET0 * integral_dpsi + BET0 * BET1 * (sin_phi * G_spike).sum();
+  double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1_LR * (cos_phi * G_spike).sum();
+  double dpsi = BET0 * integral_dpsi + BET0 * BET1_LR * (sin_phi * G_spike).sum();
 
   return std::make_pair(dvel, dpsi);
 } 

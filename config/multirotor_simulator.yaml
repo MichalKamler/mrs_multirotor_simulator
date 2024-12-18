@@ -4,23 +4,25 @@ boundary_box:
   BOX_HEIGHT: 5.0
   BOX_ABOVE_GROUND: 0.5
   SQUARE_AROUND_UAV: 1.0 #for 2d
-  USE_BOUNDARY_BOX: true
+  USE_BOUNDARY_BOX: false
+  USE_BOUNDARY_BOX_ONLYZ: true
 clock_rate: 100.0
 collisions:
   crash: false
   enabled: false
   rebounce: 100.0
 fish_model_params:
-  ALP0: 1
-  ALP1: 0.08
-  ALP2: 0
-  BET0: 0.5
-  BET1: 0.08
-  BET2: 0
-  LAM0: 1
-  LAM1: 1
-  LAM2: 0
+  ALP0: 5.0
+  ALP1_LR: 0.16
+  ALP1_UD: 0
+  BET0: 5.0
+  BET1_LR: 0.16
+  BET1_UD: 0
+  LAM0: 0.5
+  LAM1_LR: 0
+  LAM1_UD: 0.16
   GAM: 0.1
+  RELAX_RATE_VZ: 0.75 
   R: 1
   V0: 1
   VIS_FIELD_SIZE: 1024
@@ -47,10 +49,10 @@ input_timeout: 1.0
 iterate_without_input: true
 randomization:
   bounds:
-    x: 15.0
-    y: 15.0
-    z: 15.0
-  enabled: false
+    x: 0.0
+    y: 0.0
+    z: 6.0
+  enabled: true
 realtime_factor: 1.0
 sim_time_from_wall_time: true
 simulation_rate: 100.0
