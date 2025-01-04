@@ -111,6 +111,10 @@ Visualization Manager:
       Topic: /multirotor_simulator/uav_poses
       Unreliable: false
       Value: true
+    - Class: rviz/Marker
+      Name: Multirotor Markers
+      Enabled: true
+      Marker Topic: /multirotor_simulator/visualization_marker
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255

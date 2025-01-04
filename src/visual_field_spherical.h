@@ -75,13 +75,13 @@ struct V_spherical {
         return std::min(static_cast<int>((sin(angle) + 1) * (theta_size)/(2)), theta_size - 1); 
     }
 
+    int getPhiSize(){
+        return phi_size;
+    }
 
-
-
-
-
-
-
+    int getThetaSize(){
+        return theta_size;
+    }
 
     double thetaToRange(double theta) {
         return std::max(std::min(theta, M_PI_2 - d_theta), -M_PI_2 + d_theta);
@@ -92,6 +92,19 @@ struct V_spherical {
         theta = thetaToRange(theta);
         int row = static_cast<int>((theta + M_PI_2) * theta_size / M_PI);
         return row;
+    }
+
+    double rowToTheta(int row) const {
+        if (row < 0 || row >= static_cast<int>(theta_size)) {
+            std::cerr << "Unexpected index when converting row index to angle theta" << std::endl;
+            row = 0; // Defaulting to 0 if out of bounds
+        }
+        double theta = row * (M_PI / (theta_size - 1)) - M_PI_2;
+        if (theta < -M_PI_2 || theta > M_PI_2) { // Debug check for valid range
+            std::cerr << "Calculated wrong theta that is not in [-pi/2, pi/2]" << std::endl;
+            return 0; // Return 0 as a safeguard
+        }
+        return theta;
     }
 
     double phiToRange(double phi) {
@@ -112,6 +125,19 @@ struct V_spherical {
         }
         int col = static_cast<int>((phi + M_PI) * phi_size / (2 * M_PI));
         return col;
+    }
+
+    double colToPhi(int col) const {
+        if (col < 0 || col >= static_cast<int>(phi_size)) {
+            std::cerr << "Unexpected index when converting col index to angle phi" << std::endl;
+            col = 0; // Defaulting to 0 if out of bounds
+        }
+
+        double phi = col * (2 * M_PI / phi_size) - M_PI;
+        if (phi < -M_PI || phi >= M_PI) { // Debug check for valid range
+            std::cerr << "Calculated wrong phi that is not in [-pi, pi)" << std::endl;
+        }
+        return phi;
     }
     
     // Update points inside a spherical cap
