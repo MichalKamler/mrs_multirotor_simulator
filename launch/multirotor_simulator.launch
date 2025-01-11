@@ -50,6 +50,7 @@
     <remap from="~clock_out" to="/clock" />
     <remap from="~uav_poses_out" to="~uav_poses" />
     <remap from="~control_activation_in" to="~activation" />
+    <remap from="~write_values_csv" to="~write_csv" />
 
   </node>
 

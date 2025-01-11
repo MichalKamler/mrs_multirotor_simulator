@@ -3,7 +3,7 @@ boundary_box:
   BOX_WIDTH: 30.0
   BOX_HEIGHT: 5.0
   BOX_ABOVE_GROUND: 0.5
-  SQUARE_AROUND_UAV: 1.0 #for 2d
+  # SQUARE_AROUND_UAV: 1.0 #for 2d
   USE_BOUNDARY_BOX: false 
   USE_BOUNDARY_BOX_ONLYZ: true
 clock_rate: 100.0
@@ -12,23 +12,25 @@ collisions:
   enabled: false
   rebounce: 100.0
 fish_model_params:
-  ALP0: 1.0
-  ALP1_LR: 0.16
+  ALP0: 5.0
+  ALP1_LR: 0.5
   ALP1_UD: 0
-  BET0: 1.0
-  BET1_LR: 0.16
+  BET0: 5.0
+  BET1_LR: 0.5
   BET1_UD: 0
   LAM0: 0.5
   LAM1_LR: 0
-  LAM1_UD: 0.16
+  LAM1_UD: 0.5
   GAM: 0.1
   RELAX_RATE_VZ: 0.75 
   R: 1
   V0: 1
-  VIS_FIELD_SIZE: 1024
+  # VIS_FIELD_SIZE: 1024
   PHI_SIZE: 1024
   THETA_SIZE: 64
   USE_3D: false  
+  USE_MAX_DIST: false 
+  MAX_DISTANCE_UAV_CAN_DETECT: 15. #M
 frames:
   fcu:
     name: fcu

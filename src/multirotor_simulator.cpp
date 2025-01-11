@@ -125,9 +125,24 @@ private:
   ros::ServiceServer service_activate_control_;
   bool control_allowed = false;
 
+  bool writeCsvServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res);
+  ros::ServiceServer service_write_values_csv;
+  bool write_to_csv_x = false;
+
+  void updateModelMeasurements();
+  int counter; 
+  double minObservedDist;
+  double avgMinDist;
+  double avgDist;
+  double polarization;
+
+
+
 
   int phiToCol(double phi);
   double phiToRange(double phi);
+  bool emergencyStop(Eigen::VectorXd &V_i);
+  double findEmptySpace(Eigen::VectorXd &V_i);
 
   ros::Publisher vis_pub;
   SphereManager sphereManager;
@@ -139,7 +154,7 @@ private:
 
   Eigen::Vector3d compute_state_variables_3d(double vel_now, V_spherical visual_field);
   void writeToCSV(const std::string& filename, Eigen::MatrixXi field);
-  void block_V_field(V_spherical &visual_field, double psi, double x, double y, double z);
+  void block_V_field_3d(V_spherical &visual_field, double psi, double x, double y, double z);
   Eigen::VectorXd dTheta_V_oF(V_spherical &V, int row_idx);
 
   Eigen::ArrayXd cos_phi;
@@ -169,7 +184,6 @@ private:
   double LAM1_LR;
   double LAM1_UD;
   double R;
-  int VIS_FIELD_SIZE;
   double RELAX_RATE_VZ;
 
   bool USE_3D;
@@ -183,7 +197,12 @@ private:
   double BOX_LENGHT;
   double BOX_HEIGHT;
   double BOX_ABOVE_GROUND;
-  double SQUARE_AROUND_UAV;
+  // double SQUARE_AROUND_UAV;
+
+
+  bool USE_MAX_DIST;
+  double MAX_DISTANCE_UAV_CAN_DETECT;
+
 };
 
 void MultirotorSimulator::onInit() {
@@ -229,18 +248,27 @@ void MultirotorSimulator::onInit() {
   param_loader.loadParam("fish_model_params/LAM1_UD",LAM1_UD);
   param_loader.loadParam("fish_model_params/V0",V0);
   param_loader.loadParam("fish_model_params/R",R);
-  param_loader.loadParam("fish_model_params/VIS_FIELD_SIZE",VIS_FIELD_SIZE);
   param_loader.loadParam("boundary_box/BOX_WIDTH",BOX_WIDTH);
   param_loader.loadParam("boundary_box/BOX_LENGHT",BOX_LENGHT);
   param_loader.loadParam("boundary_box/BOX_HEIGHT",BOX_HEIGHT);
   param_loader.loadParam("boundary_box/BOX_ABOVE_GROUND",BOX_ABOVE_GROUND);
   param_loader.loadParam("boundary_box/USE_BOUNDARY_BOX",USE_BOUNDARY_BOX);
   param_loader.loadParam("boundary_box/USE_BOUNDARY_BOX_ONLYZ",USE_BOUNDARY_BOX_ONLYZ);
-  param_loader.loadParam("boundary_box/SQUARE_AROUND_UAV",SQUARE_AROUND_UAV);
+  // param_loader.loadParam("boundary_box/SQUARE_AROUND_UAV",SQUARE_AROUND_UAV);
   param_loader.loadParam("fish_model_params/USE_3D",USE_3D);
   param_loader.loadParam("fish_model_params/PHI_SIZE",PHI_SIZE);
   param_loader.loadParam("fish_model_params/THETA_SIZE",THETA_SIZE);
   param_loader.loadParam("fish_model_params/RELAX_RATE_VZ",RELAX_RATE_VZ);
+  param_loader.loadParam("fish_model_params/USE_MAX_DIST",USE_MAX_DIST);
+  param_loader.loadParam("fish_model_params/MAX_DISTANCE_UAV_CAN_DETECT",MAX_DISTANCE_UAV_CAN_DETECT);
+
+
+  counter = 0; 
+  minObservedDist = std::numeric_limits<double>::max(); //max value as an invalid value
+  avgMinDist = 0.;
+  avgDist = 0.;
+  polarization = 0.;
+
 
   RELAX_RATE_VZ = pow(RELAX_RATE_VZ, 1/_simulation_rate_);
 
@@ -298,7 +326,7 @@ void MultirotorSimulator::onInit() {
 
   param_loader.loadParam("uav_names", uav_names);
 
-  Eigen::VectorXd Vis_field = Eigen::VectorXd::Zero(VIS_FIELD_SIZE);
+  Eigen::VectorXd Vis_field = Eigen::VectorXd::Zero(PHI_SIZE);
   for (size_t i = 0; i < uav_names.size(); i++) {
 
     std::string uav_name = uav_names.at(i);
@@ -341,6 +369,7 @@ void MultirotorSimulator::onInit() {
   shopts.transport_hints    = ros::TransportHints().tcpNoDelay();
 
   service_activate_control_   = nh_.advertiseService("control_activation_in", &MultirotorSimulator::activationServiceCallback, this);
+  service_write_values_csv    = nh_.advertiseService("write_values_csv", &MultirotorSimulator::writeCsvServiceCallback, this);
   vis_pub = nh_.advertise<visualization_msgs::Marker>("visualization_marker", 0);
 
   sphereManager = SphereManager("sphere_points", "simulator_origin");
@@ -377,16 +406,27 @@ void MultirotorSimulator::timerMain([[maybe_unused]] const ros::WallTimerEvent& 
 
   publishPoses();
   // handleCollisions();
+
+
+
+  if(write_to_csv_x){
+    write_to_csv_x = false;
+    ROS_INFO("___________________________Writing to csv now___________________________");
+    ROS_INFO("minObservedDist: %.2f, avgMinDist: %.2f, avgDist: %.2f, polarization: %.2f", minObservedDist, avgMinDist, avgDist, polarization);
+  }
   
   static ros::Time last_velocity_update_time = ros::Time(0);  // Store last update time
   // updateUavsOdomVec();
-  if ((sim_time_ - last_velocity_update_time).toSec() >= 0.1) {  // 0.5 seconds = 2 Hz
+  if ((sim_time_ - last_velocity_update_time).toSec() >= 0.1) {  // 0.1 seconds = 10 Hz
     if (USE_3D){
       updateVelocities_3d();
     }else{
       updateVelocities();
     }
     last_velocity_update_time = sim_time_;  // Update the time
+    if(sim_time_.toSec()>=60.){
+      updateModelMeasurements();
+    }
   }
 
   // | ---------------------- publish time ---------------------- |
@@ -403,6 +443,80 @@ void MultirotorSimulator::timerMain([[maybe_unused]] const ros::WallTimerEvent& 
   }
 
   
+}
+
+void MultirotorSimulator::updateModelMeasurements(){
+  double avg_dist_one_drone;
+  double dist;
+  double x_i, y_i, z_i, x_j, y_j, z_j;
+  int n_drones = uavs_.size();
+  double avgDist_now = 0.;
+  double minObservedDistancesSum_now = 0.;
+
+  double minDist_uav;
+
+  double vx_mean, vy_mean, vz_mean;
+
+  for (size_t i = 0; i < n_drones; i++){
+    avg_dist_one_drone = 0.;
+    minDist_uav = std::numeric_limits<double>::max();
+    x_i = uavs_odom[i][0];
+    y_i = uavs_odom[i][1];
+    z_i = uavs_odom[i][2];
+
+
+    double vx_local = uavs_odom[i][3];  // local x velocity
+    double vy_local = uavs_odom[i][4];  // local y velocity
+    double vz_global = uavs_odom[i][5];
+    double psi = uavs_odom[i][6];
+    double vx_global = vx_local * cos(psi) - vy_local * sin(psi);
+    double vy_global = vx_local * sin(psi) + vy_local * cos(psi);
+
+    double vel_norm = sqrt(pow(vx_global, 2) + pow(vy_global, 2) + pow(vz_global, 2));
+    vx_mean += vx_global/vel_norm;
+    vy_mean += vy_global/vel_norm;
+    vz_mean += vz_global/vel_norm;
+
+
+    for (size_t j = 0; j < n_drones; j++){
+      if(i!=j){
+        x_j = uavs_odom[j][0];
+        y_j = uavs_odom[j][1];
+        z_j = uavs_odom[j][2];
+        dist = sqrt(pow(x_i-x_j,2) + pow(y_i-y_j,2) + pow(z_i-z_j,2));
+        avg_dist_one_drone += avg_dist_one_drone;
+        minDist_uav = std::min(minDist_uav, dist);
+      }
+    }
+    minObservedDist = std::min(minObservedDist, minDist_uav);
+    minObservedDistancesSum_now += minDist_uav;
+    avg_dist_one_drone /= (n_drones-1);
+    avgDist_now += avg_dist_one_drone;
+    // double x_i = uavs_odom[i][0];
+    // double y_i = uavs_odom[i][1];
+    // double z_i = uavs_odom[i][2];
+    // double vx_local = uavs_odom[i][3];  // local x velocity
+    // double vy_local = uavs_odom[i][4];  // local y velocity
+    // double vz_global = uavs_odom[i][5];
+    // double psi = uavs_odom[i][6];
+
+    // double vel_norm = sqrt(pow(vx_local ,2) + pow(vx_local,2)); //norm of velocity
+    // double vx_global = vx_local * cos(psi) - vy_local * sin(psi);
+    // double vy_global = vx_local * sin(psi) + vy_local * cos(psi);
+
+  }
+  vx_mean /= n_drones;
+  vy_mean /= n_drones;
+  vz_mean /= n_drones;
+
+  double pol = sqrt(pow(vx_mean, 2) + pow(vy_mean, 2) + pow(vz_mean, 2));
+
+  avgDist_now /= n_drones;
+  
+  polarization = (polarization*counter + pol)/(counter+1);
+  avgMinDist = (avgMinDist*counter + minObservedDistancesSum_now)/(counter+1);
+  avgDist = (avgDist*counter + avgDist_now)/(counter+1);
+  counter += 1; 
 }
 
 void MultirotorSimulator::timerStatus([[maybe_unused]] const ros::WallTimerEvent& event) {
@@ -575,7 +689,7 @@ void MultirotorSimulator::updateVelocities_3d(void){
     update_3_d_V_field(Vi_spherical, i, psi); //Updates the sphere represention with the detected drones
 
     if (USE_BOUNDARY_BOX || USE_BOUNDARY_BOX_ONLYZ){
-      block_V_field(Vi_spherical, psi, x_i, y_i, z_i); //updates sphere visual field if drone near edge
+      block_V_field_3d(Vi_spherical, psi, x_i, y_i, z_i); //updates sphere visual field if drone near edge
     }
 
     state_var = compute_state_variables_3d(vel_norm, Vi_spherical);
@@ -615,7 +729,7 @@ void MultirotorSimulator::updateVelocities_3d(void){
   }
 }
 
-void MultirotorSimulator::block_V_field(V_spherical &visual_field, double psi, double x, double y, double z){
+void MultirotorSimulator::block_V_field_3d(V_spherical &visual_field, double psi, double x, double y, double z){
   double w = BOX_WIDTH/2;
   double l = BOX_LENGHT/2;
 
@@ -827,32 +941,61 @@ void MultirotorSimulator::updateVelocities(void){
     double x_i = uavs_odom[i][0];
     double y_i = uavs_odom[i][1];
     double z_i = uavs_odom[i][2];
-    double yaw = uavs_odom[i][6];
+    // double yaw = uavs_odom[i][6];
     double vx_local = uavs_odom[i][3];  // local x velocity
     double vy_local = uavs_odom[i][4];  // local y velocity
+    double psi = uavs_odom[i][6];
 
-    Eigen::VectorXd visual_field_i_uav = Eigen::VectorXd::Zero(VIS_FIELD_SIZE);
+    Eigen::VectorXd visual_field_i_uav = Eigen::VectorXd::Zero(PHI_SIZE);
     
     double vel_norm = sqrt(pow(vx_local ,2) + pow(vx_local,2)); //norm of velocity
-    double vx_global = vx_local * cos(yaw) - vy_local * sin(yaw);
-    double vy_global = vx_local * sin(yaw) + vy_local * cos(yaw);
-     double psi = atan2(vy_global, vx_global); //global coord heading
-
+    double vx_global = vx_local * cos(psi) - vy_local * sin(psi);
+    double vy_global = vx_local * sin(psi) + vy_local * cos(psi);
+    // double psi = atan2(vy_global, vx_global); //global coord heading
+    
 
     compute_visual_field(i, visual_field_i_uav, psi);
 
-    if(USE_BOUNDARY_BOX){
-      block_V_field(visual_field_i_uav, psi, x_i, y_i);
+    //delete previous visual field
+    int id = i;
+    visualization_msgs::Marker marker_del = sphereManager.deleteSphere(id);
+    vis_pub.publish(marker_del);
+
+    bool emergency_stop = emergencyStop(visual_field_i_uav);
+
+    if(emergency_stop){
+      double psi_emergency = phiToRange(findEmptySpace(visual_field_i_uav) - psi);
+      ROS_INFO("NEXT UAV CLOSER THAN 3.5 m - slowly moving where most empty space, psi: %.3f", psi_emergency);
+      
+      vel_norm = 0.3; //slowly go where less uavs
+      vel_srv_.request.reference.reference.velocity.x = vel_norm * cos(psi_emergency);
+      vel_srv_.request.reference.reference.velocity.y = vel_norm * sin(psi_emergency); 
+      vel_srv_.request.reference.reference.use_heading = true;
+      vel_srv_.request.reference.reference.heading = psi_emergency;
+      
+      //generate new points for visual field
+      sphereManager.generateCylinder(1.0, x_i, y_i, z_i, visual_field_i_uav, psi, id, PHI_SIZE); //it was calculated with this psi
+    }else{
+      
+      if(USE_BOUNDARY_BOX){
+        block_V_field(visual_field_i_uav, psi, x_i, y_i);
+      }
+
+      auto dvel_dpsi = compute_state_variables(vel_norm, visual_field_i_uav);
+
+      vel_norm = vel_norm + dvel_dpsi.first;
+      psi = phiToRange(psi + dvel_dpsi.second);
+      ROS_INFO("xi: %.2f, yi: %.2f, zi: %.2f", x_i, y_i, z_i);
+      ROS_INFO("dvel: %.3f, dpsi: %.3f, velx: %.3f, velxbef: %.3f, vely: %.3f, velybef: %.3f, psi: %.3f", dvel_dpsi.first, dvel_dpsi.second, vel_norm * cos(psi), vx_global, vel_norm * sin(psi), vy_global, psi);
+
+      vel_srv_.request.reference.reference.velocity.x = vel_norm * cos(psi); //global coords set up
+      vel_srv_.request.reference.reference.velocity.y = vel_norm * sin(psi); 
+      vel_srv_.request.reference.reference.use_heading = true;
+      vel_srv_.request.reference.reference.heading = psi;
+
+      sphereManager.generateCylinder(1.0, x_i, y_i, z_i, visual_field_i_uav, phiToRange(psi - dvel_dpsi.second), id, PHI_SIZE);
     }
-
-    auto dvel_dpsi = compute_state_variables(vel_norm, visual_field_i_uav);
-
-    vel_norm = vel_norm + dvel_dpsi.first;
-    psi = psi + dvel_dpsi.second;
-
-    vel_srv_.request.reference.reference.velocity.x = vel_norm * cos(psi); //global coords set up
-    vel_srv_.request.reference.reference.velocity.y = vel_norm * sin(psi); 
-
+    
     if(uavs_odom[i][2]>1.8){
       ROS_INFO("too high up setting vel z down");
       vel_srv_.request.reference.reference.velocity.z = -0.1; 
@@ -860,27 +1003,105 @@ void MultirotorSimulator::updateVelocities(void){
       vel_srv_.request.reference.reference.velocity.z = 0; 
     }
 
-    vel_srv_.request.reference.reference.use_heading = true;
-    vel_srv_.request.reference.reference.heading = psi;
-
     if (client_vel_ref_arr[i].call(vel_srv_)){
       // ROS_INFO("------------------ Service call succesful uav ---------------");
     } else {
       ROS_ERROR("------------------ Service call unsuccesful uav ---------------");
     }
 
-    int id = i;
-
-    visualization_msgs::Marker marker_del = sphereManager.deleteSphere(id);
-    vis_pub.publish(marker_del);
-
-    sphereManager.generateCylinder(1.0, x_i, y_i, z_i, visual_field_i_uav, psi - dvel_dpsi.second, id, PHI_SIZE);
-    // sphereManager.generateSphere(1.0, x_i, y_i, z_i, Vi_spherical, yaw, id);
-
+    
+    //publish new visual field
     visualization_msgs::Marker marker_add = sphereManager.createMarker(id, visualization_msgs::Marker::ADD);
     vis_pub.publish(marker_add);
 
   }
+}
+
+double MultirotorSimulator::findEmptySpace(Eigen::VectorXd &V_i){
+  int len = V_i.size();
+  int max_count = 0;         // Maximum length of consecutive zeros
+  int max_start = -1;        // Start index of the longest zero sequence
+  int current_count = 0;     // Current length of consecutive zeros
+  int current_start = -1;    // Start index of the current zero sequence
+
+  // Iterate over the array twice to handle the wraparound
+  for (int i = 0; i < 2 * len; ++i) {
+    int idx = i % len;
+
+    if (V_i(idx) == 0) {
+      if (current_count == 0) {
+        // Start a new zero sequence
+        current_start = idx;
+      }
+      current_count++;
+
+      // Update the maximum zero sequence
+      if (current_count > max_count) {
+        max_count = current_count;
+        max_start = current_start;
+      }
+    } else {
+      // End the current zero sequence
+      current_count = 0;
+      current_start = -1;
+    }
+
+    // Stop early if we've completed one full cycle
+    if (i >= len && idx == 0) {
+      break;
+    }
+  }
+
+  if (max_count == 0) {
+    // No zeros found
+    return -1;
+  }
+
+  // Calculate the middle of the longest zero sequence
+  int middle = (max_start + max_count / 2) % len;
+  double psi = middle * (2 * M_PI / PHI_SIZE) - M_PI; //psi where most space
+  return psi;
+}
+
+bool MultirotorSimulator::emergencyStop(Eigen::VectorXd &V_i){
+  double stop_dist = 3.5; //m
+  double alpha = std::atan(R / stop_dist);
+  double phi = 0.0; //in the direction of the movement
+  int phi_min = phiToCol(phi-alpha);
+  int phi_max = phiToCol(phi+alpha);
+  int n = phi_max - phi_min;
+
+  int len = V_i.size();
+  int count = 0; // To track the current number of consecutive 1's
+  
+  // Iterate over the array twice to handle the wrapping case
+  for (int i = 0; i < 2 * len; ++i) {
+    // Use modular indexing to wrap around
+    int idx = i % len;
+    if (V_i(idx) == 1) {
+      count++;
+      // If we find n consecutive 1's, return true
+      if (count >= n) {
+        return true;
+      }
+    } else {
+      // Reset count if we encounter a 0
+      count = 0;
+    }
+    // Stop early if we've completed one full cycle
+    if (i >= len && idx == 0) {
+      break;
+    }
+  }  
+  // No segment of n consecutive 1's was found
+  return false;
+
+  // for (int i=phi_min; i<=phi_max; i++){
+  //   if (V_i(i)==0){
+  //     return false;
+  //   }
+  // }
+  // return true;
 }
 
 void MultirotorSimulator::updateUavsOdomVec(void){
@@ -896,7 +1117,9 @@ void MultirotorSimulator::updateUavsOdomVec(void){
     uav_od[3] = vel_body(0); // vel x
     uav_od[4] = vel_body(1); // vel y
     uav_od[5] = vel_body(2); // vel z
-    uav_od[6] = mrs_lib::AttitudeConverter(state.R).getHeading(); //yaw
+    double psi = atan2(state.v(1), state.v(0));
+    uav_od[6] = psi;
+    // uav_od[6] = mrs_lib::AttitudeConverter(state.R).getHeading(); //yaw
     uavs_odom.push_back(uav_od);
   }
 }
@@ -922,7 +1145,7 @@ Eigen::VectorXd MultirotorSimulator::dPhi_V_of(const Eigen::VectorXd &V) {
 
 std::pair<double, double> MultirotorSimulator::compute_state_variables(double vel_now, const Eigen::VectorXd &V_now) {    
   
-  double dPhi = (2*M_PI)/VIS_FIELD_SIZE;
+  double dPhi = (2*M_PI)/PHI_SIZE;
   // double dt = 1.0 / _simulation_rate_; 
 
   Eigen::VectorXd dPhi_V = dPhi_V_of(V_now);
@@ -937,18 +1160,32 @@ std::pair<double, double> MultirotorSimulator::compute_state_variables(double ve
   // Eigen::ArrayXd bump = (-2 * Phi.array().square()).exp();  // Wider bump
   // cos_phi = cos_phi + bump * (Phi.array().abs() <= M_PI / 2).cast<double>();
 
+  // array1 = Eigen::ArrayXd(PHI_SIZE);  // First array with 1 for -π/2 to π/2, and -1 elsewhere
+  // array2 = Eigen::ArrayXd(PHI_SIZE);  // Second array with -1 for -π to 0, and 1 for 0 to π
+
+  // Eigen::ArrayXd integrand_dvel = G_vel * array1;
+  // Eigen::ArrayXd integrand_dpsi = G_psi * array2;
+
   Eigen::ArrayXd integrand_dvel = G_vel * cos_phi;
   Eigen::ArrayXd integrand_dpsi = G_psi * sin_phi;
 
-  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dvel[VIS_FIELD_SIZE - 1]);
-  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, VIS_FIELD_SIZE - 2).sum() + 0.5 * integrand_dpsi[VIS_FIELD_SIZE - 1]);
+  double integral_dvel = dPhi * (0.5 * integrand_dvel[0] + integrand_dvel.segment(1, PHI_SIZE - 2).sum() + 0.5 * integrand_dvel[PHI_SIZE - 1]);
+  double integral_dpsi = dPhi * (0.5 * integrand_dpsi[0] + integrand_dpsi.segment(1, PHI_SIZE - 2).sum() + 0.5 * integrand_dpsi[PHI_SIZE - 1]);
+
+  // double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1_LR * (array1 * G_spike).sum();
+  // double dpsi = BET0 * integral_dpsi + BET0 * BET1_LR * (array2 * G_spike).sum();
 
   double dvel = GAM * (V0 - vel_now) + ALP0 * integral_dvel + ALP0 * ALP1_LR * (cos_phi * G_spike).sum();
   double dpsi = BET0 * integral_dpsi + BET0 * BET1_LR * (sin_phi * G_spike).sum();
 
+  // dvel = dvel/10;
+  // dpsi = dpsi/10;
+
+  // ROS_INFO("Vfield: %.2f, integ dvel: %.2f, integ dpsi: %.2f, cosGspi: %.2f, sinGspike: %.2f", V_now.array().sum(), integral_dvel, integral_dpsi, (cos_phi * G_spike).sum(), (sin_phi * G_spike).sum());
+  ROS_INFO("dvel: %.2f, dpsi: %.2f", dvel, dpsi);
+
   return std::make_pair(dvel, dpsi);
 } 
-
 
 double MultirotorSimulator::phiToRange(double phi) {
   // Adjust phi to the range [-π, π)
@@ -970,6 +1207,7 @@ int MultirotorSimulator::phiToCol(double phi){
   return col;
 }
 
+
 void MultirotorSimulator::compute_visual_field(size_t id_uav, Eigen::VectorXd &V_i, double psi) {  
   //psi - direction of the movement
 
@@ -986,6 +1224,11 @@ void MultirotorSimulator::compute_visual_field(size_t id_uav, Eigen::VectorXd &V
 
       // Compute the Euclidean distance
       double dist = std::sqrt(std::pow(relative_x, 2) + std::pow(relative_y, 2));
+
+      // Skip current update if over max visible distnace
+      if (USE_MAX_DIST && dist >=MAX_DISTANCE_UAV_CAN_DETECT){
+        continue;
+      }
 
       // Compute the rotation matrix
       Eigen::Matrix2d Rot_psi;
@@ -1023,32 +1266,25 @@ void MultirotorSimulator::compute_visual_field(size_t id_uav, Eigen::VectorXd &V
           V_i(i) = 1;
         }
       }
-
-
-
-
-      // double x_j = uavs_odom[j](0);
-      // double y_j = uavs_odom[j](1); 
-
-      // double d_i_j = sqrt( pow(x_i - x_j, 2) + pow(y_i - y_j, 2) ); //distance between current uav and j th uav
-      // double Phi_i_j = atan2( (y_j - y_i), (x_j - x_i) ); // angle of i and j uav with reagards to the global coord sys
-      // double dPhi_i_j = atan(R / d_i_j);
-
-      // double angle_uav_frame = atan2( sin(Phi_i_j - psi), cos(Phi_i_j - psi) );
-      // int center_j = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-      // size_t half_angle_width = static_cast<size_t>(dPhi_i_j / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
-
-      // for (size_t k = 0; k <= 2 * half_angle_width; k++) {
-      //   if(d_i_j>R){
-      //     int idx = (center_j - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
-      //     V_i[idx] = 1;
-      //   }else{
-      //     ROS_ERROR("uav_i above or under uav_i");
-      //   }
-      // }
     }
   }
 }
+
+bool MultirotorSimulator::writeCsvServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
+  (void)req;  // Suppress unused parameter warning
+  ROS_INFO("[AreaMonitoringController]: Activation service called.");
+  res.success = true;
+  if (write_to_csv_x) {
+    res.message = "Control was already allowed.";
+    ROS_WARN("[AreaMonitoringController]: %s", res.message.c_str());
+  } else {
+    write_to_csv_x = true;
+    res.message      = "Control allowed.";
+    ROS_INFO("[AreaMonitoringController]: %s", res.message.c_str());
+  }
+  return true;
+}
+
 
 bool MultirotorSimulator::activationServiceCallback(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
   (void)req;  // Suppress unused parameter warning
@@ -1074,38 +1310,66 @@ void MultirotorSimulator::block_V_field(Eigen::VectorXd &V_i, double psi, double
   if(!USE_BOUNDARY_BOX){
     return;
   }
-  double sq = SQUARE_AROUND_UAV/2;
+  // double sq = SQUARE_AROUND_UAV/2;
   double w = BOX_WIDTH/2;
   double l = BOX_LENGHT/2;
 
-  if(x+sq >= w){
-    double angle_uav_frame = atan2( sin(0 - psi), cos(0 - psi) );
-    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
-    block_part_of_V_field(V_i, half_angle_width, center);
-  }else if(x-sq <= -w){
-    double angle_uav_frame = atan2( sin(-M_PI - psi), cos(-M_PI - psi) );
-    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
-    block_part_of_V_field(V_i, half_angle_width, center);
+
+  auto normalizeAngle = [](double angle) {
+    while (angle > M_PI) angle -= 2 * M_PI;
+    while (angle <= -M_PI) angle += 2 * M_PI;
+    return angle;
+  };
+
+  int half_angle_width = static_cast<int>(M_PI_2 / (2 * M_PI / (PHI_SIZE - 1)));
+
+  if (USE_BOUNDARY_BOX){
+    if (x >= w){
+      // ROS_INFO("")
+      // visual_field.updateSphericalCap(normalizeAngle(psi), 0, M_PI_4);
+      block_part_of_V_field(V_i, half_angle_width, phiToCol(normalizeAngle(psi)));
+    }else if (x <= -w){
+      // visual_field.updateSphericalCap(normalizeAngle(-M_PI+psi), 0, M_PI_4);
+      block_part_of_V_field(V_i, half_angle_width, phiToCol(normalizeAngle(-M_PI+psi)));
+    }
+
+    if (y >= l){
+      // visual_field.updateSphericalCap(normalizeAngle(M_PI_2+psi), 0, M_PI_4);
+      block_part_of_V_field(V_i, half_angle_width, phiToCol(normalizeAngle(M_PI_2+psi)));
+    }else if (y <= -l){
+      // visual_field.updateSphericalCap(normalizeAngle(-M_PI_2+psi), 0, M_PI_4);
+      block_part_of_V_field(V_i, half_angle_width, phiToCol(normalizeAngle(-M_PI_2+psi)));
+    }
   }
 
-  if(y+sq >= l){
-    double angle_uav_frame = atan2( sin(M_PI_2 - psi), cos(M_PI_2 - psi) );
-    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
-    block_part_of_V_field(V_i, half_angle_width, center);
-  }else if(y-sq <= -l){
-    double angle_uav_frame = atan2( sin(-M_PI_2 - psi), cos(-M_PI_2 - psi) );
-    int center = (angle_uav_frame + M_PI) / (2 * M_PI / (VIS_FIELD_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
-    int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (VIS_FIELD_SIZE - 1)));
-    block_part_of_V_field(V_i, half_angle_width, center);
-  }
+  // if(x+sq >= w){
+  //   double angle_uav_frame = atan2( sin(0 - psi), cos(0 - psi) );
+  //   int center = (angle_uav_frame + M_PI) / (2 * M_PI / (PHI_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+  //   int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (PHI_SIZE - 1)));
+  //   block_part_of_V_field(V_i, half_angle_width, center);
+  // }else if(x-sq <= -w){
+  //   double angle_uav_frame = atan2( sin(-M_PI - psi), cos(-M_PI - psi) );
+  //   int center = (angle_uav_frame + M_PI) / (2 * M_PI / (PHI_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+  //   int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (PHI_SIZE - 1)));
+  //   block_part_of_V_field(V_i, half_angle_width, center);
+  // }
+
+  // if(y+sq >= l){
+  //   double angle_uav_frame = atan2( sin(M_PI_2 - psi), cos(M_PI_2 - psi) );
+  //   int center = (angle_uav_frame + M_PI) / (2 * M_PI / (PHI_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+  //   int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (PHI_SIZE - 1)));
+  //   block_part_of_V_field(V_i, half_angle_width, center);
+  // }else if(y-sq <= -l){
+  //   double angle_uav_frame = atan2( sin(-M_PI_2 - psi), cos(-M_PI_2 - psi) );
+  //   int center = (angle_uav_frame + M_PI) / (2 * M_PI / (PHI_SIZE - 1)); //center of the j uav in the list of the visual field in the i uav frame of reference to psi
+  //   int half_angle_width = static_cast<int>(M_PI_4 / (2 * M_PI / (PHI_SIZE - 1)));
+  //   block_part_of_V_field(V_i, half_angle_width, center);
+  // }
 }
 
 void MultirotorSimulator::block_part_of_V_field(Eigen::VectorXd &V_i, int half_angle_width, int center){
   for (int k = 0; k <= 2 * half_angle_width; k++) {
-    int idx = (center - half_angle_width + k + VIS_FIELD_SIZE) % VIS_FIELD_SIZE;
+    int idx = (center - half_angle_width + k + PHI_SIZE) % PHI_SIZE;
     V_i[idx] = 1;
   }
 }

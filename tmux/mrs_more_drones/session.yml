@@ -58,7 +58,7 @@ windows:
   - activation: 
       layout: tiled
       panes:
-        - waitForControl; history -s rosservice call /multirotor_simulator/activation             
+        - waitForControl; history -s rosservice call /multirotor_simulator/write_csv; history -s rosservice call /multirotor_simulator/activation
   - goto:
       layout: tiled
       panes:
